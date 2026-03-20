@@ -27,6 +27,11 @@ interface StoredState {
   secondsLeft: number;
   isRunning: boolean;
   sessionsCompleted: number;
+  date?: string; // YYYY-MM-DD — used to reset count daily
+}
+
+function todayDate() {
+  return new Date().toISOString().split("T")[0];
 }
 
 export function usePomodoro(
@@ -94,6 +99,7 @@ export function usePomodoro(
           secondsLeft: secondsLeftRef.current,
           isRunning: isRunningRef.current,
           sessionsCompleted: sessionsRef.current,
+          date: todayDate(),
           ...overrides,
         };
         localStorage.setItem(LS_KEY, JSON.stringify(state));
@@ -108,7 +114,15 @@ export function usePomodoro(
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return;
       const stored: StoredState = JSON.parse(raw);
-      if (stored.phase === "idle") return;
+
+      // Always restore today's session count; reset to 0 if it's a new day
+      const storedSessions = stored.date === todayDate() ? stored.sessionsCompleted : 0;
+
+      if (stored.phase === "idle" || stored.date !== todayDate()) {
+        // Just restore the session count for today, leave timer idle
+        setSessions(storedSessions);
+        return;
+      }
 
       if (stored.isRunning && stored.endTime) {
         const remaining = Math.round((stored.endTime - Date.now()) / 1000);
@@ -116,7 +130,7 @@ export function usePomodoro(
           endTimeRef.current = stored.endTime;
           setPhase(stored.phase);
           setSecondsLeft(remaining);
-          setSessions(stored.sessionsCompleted);
+          setSessions(storedSessions);
           setIsRunning(true);
           if (stored.phase === "focus") {
             // Approximate start time from remaining seconds
@@ -129,7 +143,7 @@ export function usePomodoro(
         // Timer expired while away — show next phase ready but not running
         const cfg = configRef.current;
         const newSessions =
-          stored.phase === "focus" ? stored.sessionsCompleted + 1 : stored.sessionsCompleted;
+          stored.phase === "focus" ? storedSessions + 1 : storedSessions;
         const nextPhase: PomodoroPhase =
           stored.phase === "focus"
             ? newSessions % cfg.sessionsBeforeLongBreak === 0
@@ -145,7 +159,7 @@ export function usePomodoro(
       // Was paused — restore paused state
       setPhase(stored.phase);
       setSecondsLeft(stored.secondsLeft);
-      setSessions(stored.sessionsCompleted);
+      setSessions(storedSessions);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -266,8 +280,9 @@ export function usePomodoro(
     setSecondsLeft(configRef.current.focusMinutes * 60);
     sessionStartedAtRef.current = null;
     savedMinutesRef.current = 0;
-    try { localStorage.removeItem(LS_KEY); } catch {}
-  }, [saveIncremental, setPhase, setSecondsLeft, setIsRunning]);
+    // Keep sessions count in localStorage (with idle phase) so it survives restarts
+    writeLS({ phase: "idle", endTime: null, isRunning: false, secondsLeft: configRef.current.focusMinutes * 60 });
+  }, [saveIncremental, setPhase, setSecondsLeft, setIsRunning, writeLS]);
 
   const skip = useCallback(async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);

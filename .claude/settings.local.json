@@ -14,7 +14,8 @@
       "Bash(curl:*)",
       "Bash(pkill -f \"next dev\")",
       "Bash(npm list:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(npx vercel:*)"
     ]
   }
 }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { usePomodoro, DEFAULT_CONFIG, type PomodoroPhase } from "@/lib/hooks/usePomodoro";
+import { usePomodoro, type PomodoroConfig, DEFAULT_CONFIG, type PomodoroPhase } from "@/lib/hooks/usePomodoro";
 import { useStreaks } from "@/lib/hooks/useStreak";
 import { formatTimer, todayISO } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Play, Pause, Square, SkipForward, Flame, Target, Moon } from "lucide-react";
+import { Play, Pause, Square, SkipForward, Flame, Target, Moon, Settings2, ChevronUp, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { DailyReflection } from "@/types";
 
@@ -174,9 +174,32 @@ function TimerRing({ phase, secondsLeft, progress, glowing, size = 220 }: TimerR
   );
 }
 
+const CONFIG_LS_KEY = "pomodoro_config_v1";
+
+function loadConfig(): PomodoroConfig {
+  try {
+    const raw = localStorage.getItem(CONFIG_LS_KEY);
+    if (raw) return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+  } catch {}
+  return DEFAULT_CONFIG;
+}
+
 export default function FocusPage() {
   const [glowing, setGlowing] = useState(false);
   const glowTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [config, setConfig] = useState<PomodoroConfig>(DEFAULT_CONFIG);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Load config from localStorage once on mount
+  useEffect(() => { setConfig(loadConfig()); }, []);
+
+  const updateConfig = (updates: Partial<PomodoroConfig>) => {
+    setConfig((prev) => {
+      const next = { ...prev, ...updates };
+      try { localStorage.setItem(CONFIG_LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   // 3-2-1 countdown before starting/resuming
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -220,7 +243,7 @@ export default function FocusPage() {
   }, []);
 
   const { phase, secondsLeft, isRunning, sessionsCompleted, progress, start, pause, resume, stop, skip } =
-    usePomodoro(DEFAULT_CONFIG, (minutes) => setTotalStudyMinutes((prev) => prev + minutes), handleTransition);
+    usePomodoro(config, (minutes) => setTotalStudyMinutes((prev) => prev + minutes), handleTransition);
 
   const { getStreak, refresh: refreshStreaks } = useStreaks();
   const [focusMode, setFocusMode] = useState(false);
@@ -460,29 +483,88 @@ export default function FocusPage() {
             </div>
           </div>
 
-          {/* Session dots */}
+          {/* Session dots + settings */}
           <div className="bg-surface-2 border border-border rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-              <Target className="w-4 h-4 text-brand-400" />
-              Session Progress
-            </h3>
-            <div className="flex gap-2 flex-wrap">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all",
-                    i < sessionsCompleted
-                      ? "bg-brand-600 text-white"
-                      : "bg-surface-3 text-muted-foreground"
-                  )}
-                >
-                  {i + 1}
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Target className="w-4 h-4 text-brand-400" />
+                Session Progress
+              </h3>
+              <button
+                onClick={() => setShowSettings((s) => !s)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Timer settings"
+              >
+                <Settings2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Settings panel */}
+            {showSettings && (
+              <div className="mb-4 p-3 bg-surface-3 rounded-lg space-y-2 text-xs">
+                {[
+                  { label: "Focus", key: "focusMinutes" as const, min: 1, max: 90 },
+                  { label: "Short break", key: "shortBreakMinutes" as const, min: 1, max: 30 },
+                  { label: "Long break", key: "longBreakMinutes" as const, min: 1, max: 60 },
+                  { label: "Sessions before long break", key: "sessionsBeforeLongBreak" as const, min: 1, max: 20 },
+                ].map(({ label, key, min, max }) => (
+                  <div key={key} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground flex-1">{label}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateConfig({ [key]: Math.max(min, config[key] - 1) })}
+                        disabled={phase !== "idle"}
+                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 disabled:opacity-40 flex items-center justify-center transition-colors"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      <span className="w-8 text-center tabular-nums font-semibold text-foreground">
+                        {config[key]}
+                      </span>
+                      <button
+                        onClick={() => updateConfig({ [key]: Math.min(max, config[key] + 1) })}
+                        disabled={phase !== "idle"}
+                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 disabled:opacity-40 flex items-center justify-center transition-colors"
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      {key !== "sessionsBeforeLongBreak" && (
+                        <span className="text-muted-foreground w-5">m</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {phase !== "idle" && (
+                  <p className="text-muted-foreground/60 text-center pt-1">Stop the timer to change settings</p>
+                )}
+              </div>
+            )}
+
+            {/* Dots — all sessions today, grouped by cycle */}
+            <div className="flex gap-1.5 flex-wrap">
+              {Array.from({ length: Math.max(sessionsCompleted, config.sessionsBeforeLongBreak) }).map((_, i) => {
+                const isLongBreakBoundary = i > 0 && i % config.sessionsBeforeLongBreak === 0;
+                return (
+                  <div key={i} className="flex items-center gap-1.5">
+                    {isLongBreakBoundary && (
+                      <div className="w-px h-6 bg-blue-500/40 mx-0.5" title="Long break" />
+                    )}
+                    <div
+                      className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-medium transition-all",
+                        i < sessionsCompleted
+                          ? "bg-brand-600 text-white"
+                          : "bg-surface-3 text-muted-foreground"
+                      )}
+                    >
+                      {i + 1}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              {4 - (sessionsCompleted % 4)} sessions until long break
+              {config.sessionsBeforeLongBreak - (sessionsCompleted % config.sessionsBeforeLongBreak)} sessions until long break
             </p>
           </div>
         </div>

@@ -24,13 +24,14 @@ function dayLabel(dateStr: string, period: number): string {
 
 function ChartTooltip({ active, payload, label, unit, decimals = 0 }: {
   active?: boolean;
-  payload?: Array<{ value: number }>;
+  payload?: Array<{ value: number | null }>;
   label?: string;
   unit: string;
   decimals?: number;
 }) {
   if (!active || !payload?.length) return null;
   const val = payload[0].value;
+  if (val == null) return null;
   return (
     <div className="bg-surface-2 border border-border rounded-lg px-3 py-2 text-xs shadow-lg">
       <p className="text-muted-foreground mb-0.5">{label}</p>
