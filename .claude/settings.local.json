@@ -19,7 +19,9 @@
       "Bash(wmic process:*)",
       "Bash(netstat -ano)",
       "Bash(findstr \":300\")",
-      "Bash(findstr \"LISTENING\")"
+      "Bash(findstr \"LISTENING\")",
+      "Bash(ls:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }

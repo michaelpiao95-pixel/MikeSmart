@@ -11,6 +11,8 @@ import {
   Zap,
   Settings,
   Command,
+  Users,
+  Trophy,
 } from "lucide-react";
 import { useStreaks } from "@/lib/hooks/useStreak";
 
@@ -20,6 +22,8 @@ const NAV_ITEMS = [
   { href: "/courses", label: "Courses", icon: BookOpen, shortcut: "G C" },
   { href: "/focus", label: "Focus", icon: Zap, shortcut: "G F" },
   { href: "/analytics", label: "Analytics", icon: BarChart2, shortcut: "G L" },
+  { href: "/friends", label: "Friends", icon: Users, shortcut: "" },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy, shortcut: "" },
 ];
 
 interface SidebarProps {
