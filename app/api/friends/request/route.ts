@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -16,15 +10,30 @@ export async function POST(request: NextRequest) {
   const { email } = await request.json();
   if (!email) return NextResponse.json({ error: "Email is required" }, { status: 400 });
 
-  if (email.toLowerCase() === user.email?.toLowerCase())
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (normalizedEmail === user.email?.toLowerCase())
     return NextResponse.json({ error: "You can't add yourself" }, { status: 400 });
 
-  // Find target user by email
-  const { data: target } = await admin
+  // Create admin client inside handler so env vars are always resolved
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+
+  // Search all profiles and filter in JS to avoid any PostgREST filter issues
+  const { data: profiles, error: profilesError } = await admin
     .from("profiles")
-    .select("id, email, full_name")
-    .ilike("email", email.trim())
-    .single();
+    .select("id, email, full_name");
+
+  if (profilesError) {
+    return NextResponse.json({ error: "Database error: " + profilesError.message }, { status: 500 });
+  }
+
+  const target = (profiles ?? []).find(
+    (p) => p.email?.trim().toLowerCase() === normalizedEmail
+  );
 
   if (!target) return NextResponse.json({ error: "No user found with that email" }, { status: 404 });
 
