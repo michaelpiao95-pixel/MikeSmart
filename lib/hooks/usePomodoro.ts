@@ -296,6 +296,13 @@ export function usePomodoro(
     writeLS({ sessionsCompleted: 0 });
   }, [setSessions, writeLS]);
 
+  // When idle, keep secondsLeft in sync with focusMinutes config changes
+  useEffect(() => {
+    if (phaseRef.current === "idle") {
+      setSecondsLeft(config.focusMinutes * 60);
+    }
+  }, [config.focusMinutes, setSecondsLeft]);
+
   // Tick — Date.now()-based so it stays accurate when tab is backgrounded
   useEffect(() => {
     if (!isRunning) {

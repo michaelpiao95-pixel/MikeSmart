@@ -21,7 +21,8 @@
       "Bash(findstr \":300\")",
       "Bash(findstr \"LISTENING\")",
       "Bash(ls:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''autoconfirm:'''', d.get\\(''''mailer_autoconfirm''''\\)\\)\")"
     ]
   }
 }
