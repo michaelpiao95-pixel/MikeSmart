@@ -8,6 +8,7 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+  avatar_url?: string | null;
 }
 
 interface FriendRequest {
@@ -19,18 +20,28 @@ interface FriendRequest {
   receiver?: Profile;
 }
 
-function Avatar({ name, email, size = "md" }: { name: string | null; email: string; size?: "sm" | "md" }) {
+function Avatar({ name, email, avatarUrl, size = "md" }: { name: string | null; email: string; avatarUrl?: string | null; size?: "sm" | "md" }) {
   const safeEmail = email || "?";
   const initials = name
     ? name.split(" ").map((n) => n[0]).filter(Boolean).join("").toUpperCase().slice(0, 2)
     : safeEmail[0].toUpperCase();
   const colors = ["bg-indigo-600", "bg-emerald-600", "bg-amber-600", "bg-blue-600", "bg-purple-600", "bg-pink-600"];
   const color = colors[safeEmail.charCodeAt(0) % colors.length];
+  const sizeClass = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name ?? email}
+        className={cn("rounded-full object-cover shrink-0", sizeClass)}
+      />
+    );
+  }
   return (
     <div className={cn(
       "rounded-full flex items-center justify-center font-semibold text-white shrink-0",
       color,
-      size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm"
+      sizeClass
     )}>
       {initials}
     </div>
@@ -147,7 +158,7 @@ export default function FriendsPage() {
             <div className="bg-surface-2 border border-border rounded-xl divide-y divide-border">
               {friends.map((f) => (
                 <div key={f.id} className="flex items-center gap-3 p-4">
-                  <Avatar name={f.full_name} email={f.email} />
+                  <Avatar name={f.full_name} email={f.email} avatarUrl={f.avatar_url} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
                       {f.full_name ?? f.email}
@@ -214,7 +225,7 @@ export default function FriendsPage() {
               <div className="space-y-3">
                 {incoming.map((req) => (
                   <div key={req.id} className="flex items-center gap-3">
-                    <Avatar name={req.sender?.full_name ?? null} email={req.sender?.email ?? ""} size="sm" />
+                    <Avatar name={req.sender?.full_name ?? null} email={req.sender?.email ?? ""} avatarUrl={req.sender?.avatar_url} size="sm" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
                         {req.sender?.full_name ?? req.sender?.email}
@@ -255,7 +266,7 @@ export default function FriendsPage() {
               <div className="space-y-3">
                 {outgoing.map((req) => (
                   <div key={req.id} className="flex items-center gap-3">
-                    <Avatar name={req.receiver?.full_name ?? null} email={req.receiver?.email ?? ""} size="sm" />
+                    <Avatar name={req.receiver?.full_name ?? null} email={req.receiver?.email ?? ""} avatarUrl={req.receiver?.avatar_url} size="sm" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
                         {req.receiver?.full_name ?? req.receiver?.email}

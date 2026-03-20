@@ -23,13 +23,22 @@ const RANK_COLORS: Record<number, string> = {
   3: "text-amber-700",
 };
 
-function Avatar({ name, email }: { name: string | null; email: string }) {
+function Avatar({ name, email, avatarUrl }: { name: string | null; email: string; avatarUrl?: string | null }) {
   const safeEmail = email || "?";
   const initials = name
     ? name.split(" ").map((n) => n[0]).filter(Boolean).join("").toUpperCase().slice(0, 2)
     : safeEmail[0].toUpperCase();
   const colors = ["bg-indigo-600", "bg-emerald-600", "bg-amber-600", "bg-blue-600", "bg-purple-600", "bg-pink-600"];
   const color = colors[safeEmail.charCodeAt(0) % colors.length];
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name ?? email}
+        className="w-9 h-9 rounded-full object-cover shrink-0"
+      />
+    );
+  }
   return (
     <div className={cn("w-9 h-9 rounded-full flex items-center justify-center font-semibold text-white text-sm shrink-0", color)}>
       {initials}
@@ -108,7 +117,7 @@ export default function LeaderboardPage() {
                     heights[podiumIdx]
                   )}>
                     <span className="text-xl mb-1">{MEDAL[realRank]}</span>
-                    <Avatar name={entry.fullName} email={entry.email} />
+                    <Avatar name={entry.fullName} email={entry.email} avatarUrl={entry.avatarUrl} />
                     <p className="text-xs font-medium text-foreground truncate max-w-full mt-1.5 text-center">
                       {entry.isMe ? "You" : (entry.fullName ?? entry.email.split("@")[0])}
                     </p>
@@ -137,7 +146,7 @@ export default function LeaderboardPage() {
                   {MEDAL[entry.rank] ?? `#${entry.rank}`}
                 </div>
 
-                <Avatar name={entry.fullName} email={entry.email} />
+                <Avatar name={entry.fullName} email={entry.email} avatarUrl={entry.avatarUrl} />
 
                 <div className="flex-1 min-w-0">
                   <p className={cn(
@@ -163,7 +172,7 @@ export default function LeaderboardPage() {
           {myEntry && myEntry.rank > 3 && (
             <div className="flex items-center gap-3 px-4 py-3 bg-brand-600/10 border border-brand-600/20 rounded-xl">
               <span className="text-sm font-bold text-brand-400 w-7 text-center">#{myEntry.rank}</span>
-              <Avatar name={myEntry.fullName} email={myEntry.email} />
+              <Avatar name={myEntry.fullName} email={myEntry.email} avatarUrl={myEntry.avatarUrl} />
               <div className="flex-1">
                 <p className="text-sm font-medium text-brand-400">Your position</p>
                 <p className="text-xs text-muted-foreground">{myEntry.hours}h studied</p>

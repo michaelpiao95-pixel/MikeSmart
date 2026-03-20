@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { SyncButton } from "@/components/canvas/SyncButton";
 import { cn } from "@/lib/utils";
-import { CheckCircle, AlertCircle, Database } from "lucide-react";
+import { CheckCircle, AlertCircle, Database, Camera } from "lucide-react";
 
 interface Profile {
   id: string;
   email: string;
   full_name?: string;
+  avatar_url?: string;
   canvas_base_url?: string;
   canvas_api_token_encrypted?: string;
   canvas_last_synced_at?: string;
@@ -28,6 +29,11 @@ export default function SettingsPage() {
   const [justSaved, setJustSaved] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarResult, setAvatarResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   const load = useCallback(async () => {
@@ -47,6 +53,7 @@ export default function SettingsPage() {
       setProfile(data);
       setCanvasUrl(data.canvas_base_url ?? "");
       setFullName(data.full_name ?? "");
+      setAvatarUrl(data.avatar_url ?? null);
     }
   }, [supabase]);
 
@@ -133,6 +140,31 @@ export default function SettingsPage() {
     }
 
     setTesting(false);
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+    handleAvatarUpload(file);
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    setUploadingAvatar(true);
+    setAvatarResult(null);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/avatar", { method: "POST", body: form });
+    const json = await res.json();
+    if (res.ok) {
+      setAvatarUrl(json.avatarUrl);
+      setAvatarResult({ ok: true, message: "Profile picture updated!" });
+    } else {
+      setAvatarResult({ ok: false, message: json.error ?? "Upload failed" });
+    }
+    setUploadingAvatar(false);
+    setTimeout(() => setAvatarResult(null), 4000);
   };
 
   const handleSignOut = async () => {
@@ -299,6 +331,59 @@ export default function SettingsPage() {
       <section className="bg-surface-2 border border-border rounded-xl p-5">
         <h2 className="text-sm font-semibold text-foreground mb-4">Profile</h2>
         <div className="space-y-4">
+          {/* Avatar upload */}
+          <div>
+            <label className="block text-sm text-muted-foreground mb-2">Profile Picture</label>
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                {(avatarPreview ?? avatarUrl) ? (
+                  <img
+                    src={avatarPreview ?? avatarUrl!}
+                    alt="Profile"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-surface-3 border-2 border-border flex items-center justify-center text-muted-foreground">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                )}
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                >
+                  {uploadingAvatar ? "Uploading..." : "Choose Photo"}
+                </Button>
+                <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP · max 5MB</p>
+              </div>
+            </div>
+            {avatarResult && (
+              <div className={cn(
+                "flex items-center gap-2 text-xs p-2 rounded-lg border mt-2",
+                avatarResult.ok
+                  ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-400"
+                  : "bg-red-950/30 border-red-900/50 text-red-400"
+              )}>
+                {avatarResult.ok ? <CheckCircle className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                {avatarResult.message}
+              </div>
+            )}
+          </div>
           <div>
             <label className="block text-sm text-muted-foreground mb-1.5">
               Email

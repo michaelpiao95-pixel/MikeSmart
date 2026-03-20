@@ -34,11 +34,11 @@ export async function GET() {
   const receiverIds = (outgoing ?? []).map((r) => r.receiver_id);
   const allIds = [...new Set([...senderIds, ...receiverIds])];
 
-  let profiles: Record<string, { email: string; full_name: string | null }> = {};
+  let profiles: Record<string, { email: string; full_name: string | null; avatar_url: string | null }> = {};
   if (allIds.length > 0) {
     const { data: profileData } = await admin
       .from("profiles")
-      .select("id, email, full_name")
+      .select("id, email, full_name, avatar_url")
       .in("id", allIds);
     profiles = Object.fromEntries((profileData ?? []).map((p) => [p.id, p]));
   }
