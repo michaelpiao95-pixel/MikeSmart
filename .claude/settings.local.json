@@ -16,7 +16,10 @@
       "Bash(npm list:*)",
       "Bash(taskkill:*)",
       "Bash(npx vercel:*)",
-      "Bash(wmic process:*)"
+      "Bash(wmic process:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":300\")",
+      "Bash(findstr \"LISTENING\")"
     ]
   }
 }

@@ -252,7 +252,21 @@ export default function FocusPage() {
   });
   const [reflectionSaved, setReflectionSaved] = useState(false);
   const [totalStudyMinutes, setTotalStudyMinutes] = useState(0);
-  const supabase = createClient();
+  const supabase = useRef(createClient()).current;
+
+  const handleReset = useCallback(async () => {
+    resetSessions();
+    setTotalStudyMinutes(0);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    await supabase
+      .from("pomodoro_sessions")
+      .delete()
+      .eq("user_id", user.id)
+      .gte("started_at", todayStart.toISOString());
+  }, [resetSessions, supabase]);
   const taskStreak = getStreak("task_completion");
   const reflectionStreak = getStreak("daily_reflection");
 
@@ -493,9 +507,9 @@ export default function FocusPage() {
               <div className="flex items-center gap-2">
                 {sessionsCompleted > 0 && (
                   <button
-                    onClick={resetSessions}
+                    onClick={handleReset}
                     className="text-xs text-muted-foreground hover:text-red-400 transition-colors"
-                    title="Reset session count"
+                    title="Reset sessions and study time"
                   >
                     Reset
                   </button>
