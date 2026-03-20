@@ -6,7 +6,15 @@
       "Bash(kill %1)",
       "Bash(npx next:*)",
       "Bash(npx kill-port:*)",
-      "Bash(taskkill //F //IM node.exe)"
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(ls /c/Users/monke/student-dashboard/app/*.ico)",
+      "Bash(ls /c/Users/monke/student-dashboard/app/*.png)",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npm list:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

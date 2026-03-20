@@ -1,26 +1,53 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Spinner } from "@/components/ui/Spinner";
-import { Progress } from "@/components/ui/Progress";
 import { Button } from "@/components/ui/Button";
 import { cn, calculateWeightedGrade } from "@/lib/utils";
 import type { Course, GradeComponent } from "@/types";
-import { ChevronDown, ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+const RANK_COLORS = ["#f59e0b", "#94a3b8", "#b45309"];
+const RANK_LABELS = ["1st", "2nd", "3rd"];
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const supabase = createClient();
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const supabase = useRef(createClient()).current;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const load = useCallback(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+    setUserId(user.id);
 
     const { data } = await supabase
       .from("courses")
@@ -28,19 +55,39 @@ export default function CoursesPage() {
       .eq("user_id", user.id)
       .order("name");
 
-    setCourses(
-      (data ?? []).map((c) => ({
-        ...c,
-        grade_components: c.grade_components ?? [],
-        links: c.links ?? [],
-      }))
-    );
+    const loaded = (data ?? []).map((c) => ({
+      ...c,
+      grade_components: c.grade_components ?? [],
+      links: c.links ?? [],
+    }));
+    setCourses(loaded);
+
+    // Load saved order from localStorage
+    const savedRaw = localStorage.getItem(`course_order_${user.id}`);
+    const savedOrder: string[] = savedRaw ? JSON.parse(savedRaw) : [];
+    // Merge: saved order first, then any new courses not yet ranked
+    const savedIds = savedOrder.filter((id) => loaded.some((c) => c.id === id));
+    const newIds = loaded.filter((c) => !savedIds.includes(c.id)).map((c) => c.id);
+    setOrderedIds([...savedIds, ...newIds]);
+
     setLoading(false);
   }, [supabase]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+
+  const orderedCourses = orderedIds
+    .map((id) => courses.find((c) => c.id === id))
+    .filter(Boolean) as Course[];
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = orderedIds.indexOf(active.id as string);
+    const newIndex = orderedIds.indexOf(over.id as string);
+    const newOrder = arrayMove(orderedIds, oldIndex, newIndex);
+    setOrderedIds(newOrder);
+    if (userId) localStorage.setItem(`course_order_${userId}`, JSON.stringify(newOrder));
+  };
 
   const handleSave = async (course: Course) => {
     setSaving(course.id);
@@ -72,7 +119,7 @@ export default function CoursesPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Courses</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Academic control center — grades, notes, and grade calculator.
+          Drag to rank by importance — top 3 appear on Today.
         </p>
       </div>
 
@@ -83,40 +130,79 @@ export default function CoursesPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {courses.map((course) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              expanded={expanded === course.id}
-              saving={saving === course.id}
-              onToggle={() =>
-                setExpanded(expanded === course.id ? null : course.id)
-              }
-              onUpdate={(updates) => updateCourse(course.id, updates)}
-              onSave={() => handleSave(course)}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+            <div className="space-y-3">
+              {orderedCourses.map((course, index) => (
+                <SortableCourseCard
+                  key={course.id}
+                  course={course}
+                  rank={index}
+                  expanded={expanded === course.id}
+                  saving={saving === course.id}
+                  onToggle={() =>
+                    setExpanded(expanded === course.id ? null : course.id)
+                  }
+                  onUpdate={(updates) => updateCourse(course.id, updates)}
+                  onSave={() => handleSave(course)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
+    </div>
+  );
+}
+
+function SortableCourseCard(props: {
+  course: Course;
+  rank: number;
+  expanded: boolean;
+  saving: boolean;
+  onToggle: () => void;
+  onUpdate: (updates: Partial<Course>) => void;
+  onSave: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.course.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <CourseCard {...props} dragHandleProps={{ ...attributes, ...listeners }} />
     </div>
   );
 }
 
 function CourseCard({
   course,
+  rank,
   expanded,
   saving,
   onToggle,
   onUpdate,
   onSave,
+  dragHandleProps,
 }: {
   course: Course;
+  rank: number;
   expanded: boolean;
   saving: boolean;
   onToggle: () => void;
   onUpdate: (updates: Partial<Course>) => void;
   onSave: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
   const components = course.grade_components ?? [];
   const finalComponent = components.find((c) => c.name.toLowerCase().includes("final"));
@@ -154,38 +240,59 @@ function CourseCard({
   };
 
   const totalWeight = components.reduce((s, c) => s + c.weight, 0);
+  const rankColor = RANK_COLORS[rank] ?? "#6b7280";
+  const rankLabel = RANK_LABELS[rank] ?? `${rank + 1}th`;
 
   return (
     <div className="bg-surface-2 border border-border rounded-xl overflow-hidden">
       {/* Header */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-3 p-4 hover:bg-surface-3 transition-colors"
-      >
+      <div className="flex items-center">
+        {/* Drag handle */}
+        <button
+          {...dragHandleProps}
+          className="pl-3 pr-1 py-4 text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+          tabIndex={-1}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+
+        {/* Rank badge */}
         <div
-          className="w-3 h-3 rounded-full shrink-0"
-          style={{ backgroundColor: course.color }}
-        />
-        <div className="flex-1 text-left min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">
-            {course.name}
-          </p>
-          <p className="text-xs text-muted-foreground">{course.course_code}</p>
+          className="w-8 h-6 rounded text-[10px] font-bold flex items-center justify-center shrink-0 mr-1"
+          style={{ color: rankColor, backgroundColor: `${rankColor}18` }}
+        >
+          {rankLabel}
         </div>
-        {hasGrades && (
-          <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-foreground tabular-nums">
-              {currentGrade}%
+
+        <button
+          onClick={onToggle}
+          className="flex-1 flex items-center gap-3 pr-4 py-4 hover:bg-surface-3 transition-colors min-w-0"
+        >
+          <div
+            className="w-3 h-3 rounded-full shrink-0"
+            style={{ backgroundColor: course.color }}
+          />
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">
+              {course.name}
             </p>
-            <p className="text-xs text-muted-foreground">current</p>
+            <p className="text-xs text-muted-foreground">{course.course_code}</p>
           </div>
-        )}
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-        )}
-      </button>
+          {hasGrades && (
+            <div className="text-right shrink-0">
+              <p className="text-sm font-bold text-foreground tabular-nums">
+                {currentGrade}%
+              </p>
+              <p className="text-xs text-muted-foreground">current</p>
+            </div>
+          )}
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          )}
+        </button>
+      </div>
 
       {/* Expanded content */}
       {expanded && (

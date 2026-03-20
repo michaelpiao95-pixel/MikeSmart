@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, AlertCircle, BookOpen } from "lucide-react";
+import { Plus, Trash2, AlertCircle, BookOpen, Trophy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PomodoroTimer } from "@/components/dashboard/PomodoroTimer";
 import { DailyScore } from "@/components/dashboard/DailyScore";
@@ -11,12 +11,13 @@ import {
   cn,
   todayISO,
   calculateCompletionScore,
+  calculateWeightedGrade,
   PRIORITY_CONFIG,
   formatDueDate,
   isOverdue,
   isDueWithin24Hours,
 } from "@/lib/utils";
-import type { Task, Assignment, DailyReflection } from "@/types";
+import type { Task, Assignment, DailyReflection, Course } from "@/types";
 
 export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -32,6 +33,7 @@ export default function TodayPage() {
   const [weekTasksCompleted, setWeekTasksCompleted] = useState(0);
   const [weekTasksTotal, setWeekTasksTotal] = useState(0);
   const [yesterdayReflection, setYesterdayReflection] = useState<DailyReflection | null>(null);
+  const [topCourses, setTopCourses] = useState<Course[]>([]);
 
   const supabase = createClient();
   const today = todayISO();
@@ -56,7 +58,7 @@ export default function TodayPage() {
     yesterday.setDate(now.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-    const [tasksRes, assignmentsRes, profileRes, pomodoroRes, weekTasksRes, reflRes] =
+    const [tasksRes, assignmentsRes, profileRes, pomodoroRes, weekTasksRes, reflRes, coursesRes] =
       await Promise.all([
         fetch(`/api/tasks?date=${today}`),
         fetch("/api/assignments"),
@@ -74,6 +76,7 @@ export default function TodayPage() {
           .gte("scheduled_date", weekStart)
           .lte("scheduled_date", weekEnd),
         fetch(`/api/reflection?date=${yesterdayStr}`),
+        supabase.from("courses").select("*").eq("user_id", user.id),
       ]);
 
     if (!tasksRes.ok || !assignmentsRes.ok) {
@@ -117,6 +120,20 @@ export default function TodayPage() {
 
     const reflJson = await reflRes.json().catch(() => ({}));
     setYesterdayReflection(reflJson.data ?? null);
+
+    // Top courses sorted by importance order stored in localStorage
+    const allCourses: Course[] = (coursesRes.data ?? []).map((c) => ({
+      ...c,
+      grade_components: c.grade_components ?? [],
+      links: c.links ?? [],
+    }));
+    const savedOrderRaw = localStorage.getItem(`course_order_${user.id}`);
+    const savedOrder: string[] = savedOrderRaw ? JSON.parse(savedOrderRaw) : [];
+    const ordered = [
+      ...savedOrder.map((id) => allCourses.find((c) => c.id === id)).filter(Boolean) as Course[],
+      ...allCourses.filter((c) => !savedOrder.includes(c.id)),
+    ];
+    setTopCourses(ordered.slice(0, 3));
 
     setLoading(false);
   }, [supabase, today]);
@@ -262,6 +279,46 @@ export default function TodayPage() {
         />
         <PomodoroTimer />
       </div>
+
+      {/* Top Courses */}
+      {topCourses.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            Priority Courses
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {topCourses.map((course, i) => {
+              const components = course.grade_components ?? [];
+              const finalComp = components.find((c) => c.name.toLowerCase().includes("final"));
+              const { currentGrade } = calculateWeightedGrade(components, course.target_grade ?? 90, finalComp?.weight ?? 0);
+              const hasGrades = components.some((c) => c.score !== undefined);
+              const rankLabels = ["1st", "2nd", "3rd"];
+              const rankColors = ["#f59e0b", "#94a3b8", "#b45309"];
+              return (
+                <div key={course.id} className="bg-surface-2 border border-border rounded-xl p-4 flex items-start gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: course.color }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">{course.name}</p>
+                    <p className="text-xs text-muted-foreground">{course.course_code}</p>
+                    {hasGrades && (
+                      <p className="text-sm font-bold tabular-nums mt-1" style={{ color: course.color }}>
+                        {currentGrade}%
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                    style={{ color: rankColors[i], backgroundColor: `${rankColors[i]}18` }}
+                  >
+                    {rankLabels[i]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Due today from Canvas */}
       {todayAssignments.length > 0 && (

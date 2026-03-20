@@ -13,134 +13,70 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const days = parseInt(searchParams.get("days") ?? "30", 10);
+  const days = parseInt(searchParams.get("days") ?? "7", 10);
+
   const since = new Date();
-  since.setDate(since.getDate() - days);
+  since.setDate(since.getDate() - days + 1);
+  since.setHours(0, 0, 0, 0);
   const sinceISO = since.toISOString();
+  const sinceDate = sinceISO.split("T")[0];
 
-  // Parallel fetches
-  const [tasksResult, pomodoroResult, reflectionsResult, assignmentsResult] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select("status, completed_at, scheduled_date, created_at")
-        .eq("user_id", user.id)
-        .gte("created_at", sinceISO),
+  const [pomodoroResult, tasksResult] = await Promise.all([
+    supabase
+      .from("pomodoro_sessions")
+      .select("started_at, duration_minutes")
+      .eq("user_id", user.id)
+      .gte("started_at", sinceISO),
 
-      supabase
-        .from("pomodoro_sessions")
-        .select("started_at, duration_minutes, completed")
-        .eq("user_id", user.id)
-        .gte("started_at", sinceISO),
+    supabase
+      .from("tasks")
+      .select("status, scheduled_date")
+      .eq("user_id", user.id)
+      .gte("scheduled_date", sinceDate)
+      .not("scheduled_date", "is", null),
+  ]);
 
-      supabase
-        .from("daily_reflections")
-        .select("date, completion_score, mood")
-        .eq("user_id", user.id)
-        .gte("date", sinceISO.split("T")[0])
-        .order("date", { ascending: true }),
-
-      supabase
-        .from("assignments")
-        .select("is_completed, completed_at, due_at")
-        .eq("user_id", user.id)
-        .gte("created_at", sinceISO),
-    ]);
-
-  // Build daily stats map
-  const dailyMap = new Map<
-    string,
-    {
-      date: string;
-      tasksCompleted: number;
-      studyMinutes: number;
-      pomodoroSessions: number;
-      completionScore: number;
-    }
-  >();
-
-  // Process pomodoro sessions
+  // Study minutes per day
+  const studyByDay = new Map<string, number>();
   for (const s of pomodoroResult.data ?? []) {
     const date = s.started_at.split("T")[0];
-    if (!dailyMap.has(date)) {
-      dailyMap.set(date, {
-        date,
-        tasksCompleted: 0,
-        studyMinutes: 0,
-        pomodoroSessions: 0,
-        completionScore: 0,
-      });
-    }
-    const entry = dailyMap.get(date)!;
-    if (s.completed) {
-      entry.studyMinutes += s.duration_minutes;
-      entry.pomodoroSessions += 1;
-    }
+    studyByDay.set(date, (studyByDay.get(date) ?? 0) + s.duration_minutes);
   }
 
-  // Process task completions
+  // Tasks total + completed per day (by scheduled_date)
+  const tasksByDay = new Map<string, { total: number; completed: number }>();
   for (const t of tasksResult.data ?? []) {
-    if (t.status === "completed" && t.completed_at) {
-      const date = t.completed_at.split("T")[0];
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, {
-          date,
-          tasksCompleted: 0,
-          studyMinutes: 0,
-          pomodoroSessions: 0,
-          completionScore: 0,
-        });
-      }
-      dailyMap.get(date)!.tasksCompleted += 1;
-    }
+    const date = t.scheduled_date as string;
+    if (!tasksByDay.has(date)) tasksByDay.set(date, { total: 0, completed: 0 });
+    const entry = tasksByDay.get(date)!;
+    entry.total++;
+    if (t.status === "completed") entry.completed++;
   }
 
-  // Overlay reflection scores
-  for (const r of reflectionsResult.data ?? []) {
-    if (dailyMap.has(r.date)) {
-      dailyMap.get(r.date)!.completionScore = r.completion_score;
-    }
-  }
+  // Build full date range with 0-fill for missing days
+  const daily = Array.from({ length: days }, (_, i) => {
+    const d = new Date(since);
+    d.setDate(since.getDate() + i);
+    const date = d.toISOString().split("T")[0];
+    const minutes = studyByDay.get(date) ?? 0;
+    const tasks = tasksByDay.get(date);
+    return {
+      date,
+      studyHours: +(minutes / 60).toFixed(2),
+      taskPct: tasks && tasks.total > 0
+        ? Math.round((tasks.completed / tasks.total) * 100)
+        : null,
+    };
+  });
 
-  const dailyStats = Array.from(dailyMap.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
-
-  // Summary stats
-  const totalStudyMinutes = (pomodoroResult.data ?? [])
-    .filter((s) => s.completed)
-    .reduce((sum, s) => sum + s.duration_minutes, 0);
-
-  const totalTasksCompleted = (tasksResult.data ?? []).filter(
-    (t) => t.status === "completed"
-  ).length;
-
-  const totalAssignmentsCompleted = (assignmentsResult.data ?? []).filter(
-    (a) => a.is_completed
-  ).length;
-
-  const avgCompletionScore =
-    (reflectionsResult.data ?? []).length > 0
-      ? Math.round(
-          (reflectionsResult.data ?? []).reduce(
-            (sum, r) => sum + r.completion_score,
-            0
-          ) / (reflectionsResult.data ?? []).length
-        )
-      : 0;
+  const totalMinutes = [...studyByDay.values()].reduce((a, b) => a + b, 0);
 
   return NextResponse.json({
     data: {
-      dailyStats,
+      daily,
       summary: {
-        totalStudyMinutes,
-        totalStudyHours: Math.round(totalStudyMinutes / 60),
-        totalTasksCompleted,
-        totalAssignmentsCompleted,
-        avgCompletionScore,
-        totalPomodoros: (pomodoroResult.data ?? []).filter((s) => s.completed).length,
+        totalStudyHours: +(totalMinutes / 60).toFixed(1),
       },
-      reflections: reflectionsResult.data ?? [],
     },
   });
 }

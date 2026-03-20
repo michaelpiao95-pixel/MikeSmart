@@ -65,9 +65,19 @@ export async function POST(request: NextRequest) {
     .select("*")
     .eq("user_id", user.id)
     .eq("streak_type", "daily_reflection")
-    .single();
+    .maybeSingle();
 
-  if (streak && streak.last_activity_date !== date) {
+  if (!streak) {
+    // First ever reflection — create the streak row
+    await supabase.from("streaks").insert({
+      user_id: user.id,
+      streak_type: "daily_reflection",
+      current_streak: 1,
+      longest_streak: 1,
+      last_activity_date: date,
+    });
+  } else if (streak.last_activity_date !== date) {
+    // New day — extend or reset streak
     const isConsecutive = streak.last_activity_date === yesterdayStr;
     const newStreak = isConsecutive ? streak.current_streak + 1 : 1;
     await supabase
