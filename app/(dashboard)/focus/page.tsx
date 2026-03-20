@@ -242,7 +242,7 @@ export default function FocusPage() {
     glowTimeout.current = setTimeout(() => setGlowing(false), 700);
   }, []);
 
-  const { phase, secondsLeft, isRunning, sessionsCompleted, progress, start, pause, resume, stop, skip } =
+  const { phase, secondsLeft, isRunning, sessionsCompleted, progress, start, pause, resume, stop, skip, resetSessions } =
     usePomodoro(config, (minutes) => setTotalStudyMinutes((prev) => prev + minutes), handleTransition);
 
   const { getStreak, refresh: refreshStreaks } = useStreaks();
@@ -490,13 +490,24 @@ export default function FocusPage() {
                 <Target className="w-4 h-4 text-brand-400" />
                 Session Progress
               </h3>
-              <button
-                onClick={() => setShowSettings((s) => !s)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title="Timer settings"
-              >
-                <Settings2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {sessionsCompleted > 0 && (
+                  <button
+                    onClick={resetSessions}
+                    className="text-xs text-muted-foreground hover:text-red-400 transition-colors"
+                    title="Reset session count"
+                  >
+                    Reset
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowSettings((s) => !s)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="Timer settings"
+                >
+                  <Settings2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Settings panel */}

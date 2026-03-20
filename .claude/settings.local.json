@@ -15,7 +15,8 @@
       "Bash(pkill -f \"next dev\")",
       "Bash(npm list:*)",
       "Bash(taskkill:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(wmic process:*)"
     ]
   }
 }

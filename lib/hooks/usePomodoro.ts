@@ -291,6 +291,11 @@ export function usePomodoro(
     await transitionToNext();
   }, [transitionToNext, setIsRunning]);
 
+  const resetSessions = useCallback(() => {
+    setSessions(0);
+    writeLS({ sessionsCompleted: 0 });
+  }, [setSessions, writeLS]);
+
   // Tick — Date.now()-based so it stays accurate when tab is backgrounded
   useEffect(() => {
     if (!isRunning) {
@@ -333,5 +338,6 @@ export function usePomodoro(
     resume,
     stop,
     skip,
+    resetSessions,
   };
 }
