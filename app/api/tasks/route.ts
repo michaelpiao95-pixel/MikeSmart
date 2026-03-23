@@ -24,9 +24,13 @@ export async function GET(request: NextRequest) {
     .eq("user_id", user.id);
 
   if (includeHabits) {
-    query = query.or(`scheduled_date.eq.${date},is_habit.eq.true`);
+    query = query.or(
+      `scheduled_date.eq.${date},is_habit.eq.true,and(scheduled_date.lt.${date},status.neq.completed,is_habit.eq.false)`
+    );
   } else {
-    query = query.eq("scheduled_date", date);
+    query = query.or(
+      `scheduled_date.eq.${date},and(scheduled_date.lt.${date},status.neq.completed,is_habit.eq.false)`
+    );
   }
 
   const { data, error: dbError } = await query.order("sort_order", { ascending: true });

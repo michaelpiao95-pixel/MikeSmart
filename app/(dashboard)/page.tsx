@@ -606,6 +606,15 @@ function TaskRow({
     setEditing(false);
   };
 
+  const daysOverdue = (() => {
+    if (!task.scheduled_date || task.is_habit) return 0;
+    const scheduled = new Date(task.scheduled_date);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diff = Math.floor((now.getTime() - scheduled.getTime()) / 86400000);
+    return diff > 0 ? diff : 0;
+  })();
+
   if (editing) {
     return (
       <div className="bg-surface-2 border border-brand-600/40 rounded-lg px-3 py-2.5 space-y-2">
@@ -689,6 +698,12 @@ function TaskRow({
 
       {task.is_habit && (
         <span title="Everyday task"><RefreshCw className="w-3 h-3 text-brand-400/60 shrink-0" /></span>
+      )}
+
+      {daysOverdue > 0 && !done && (
+        <span className="text-xs px-1.5 py-0.5 rounded font-medium shrink-0 bg-red-950/40 text-red-400 border border-red-900/30">
+          {daysOverdue}d overdue
+        </span>
       )}
 
       {!done && (
