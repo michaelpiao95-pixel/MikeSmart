@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { SyncButton } from "@/components/canvas/SyncButton";
 import { cn } from "@/lib/utils";
-import { CheckCircle, AlertCircle, Database, Camera } from "lucide-react";
+import { CheckCircle, AlertCircle, Camera } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -413,46 +413,6 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Keyboard shortcuts */}
-      <section className="bg-surface-2 border border-border rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-foreground mb-4">
-          Keyboard Shortcuts
-        </h2>
-        <div className="space-y-2">
-          {[
-            { key: "⌘K", label: "Open command palette" },
-            { key: "G T", label: "Go to Today" },
-            { key: "G A", label: "Go to Assignments" },
-            { key: "G C", label: "Go to Courses" },
-            { key: "G F", label: "Go to Focus" },
-            { key: "G L", label: "Go to Analytics" },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between py-1.5">
-              <span className="text-sm text-muted-foreground">{label}</span>
-              <kbd className="text-xs font-mono bg-surface-3 border border-border px-2 py-1 rounded text-foreground">
-                {key}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Database Setup */}
-      <section className="bg-surface-2 border border-border rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Database className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Database Setup</h2>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">
-          If you see "relation does not exist" errors, your Supabase database tables haven&apos;t been created yet.
-        </p>
-        <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside mb-3">
-          <li>Open your Supabase project dashboard</li>
-          <li>Go to <strong className="text-foreground">SQL Editor</strong></li>
-          <li>Paste and run the contents of <code className="font-mono bg-surface-3 px-1 rounded">supabase/schema.sql</code></li>
-          <li>Refresh this page</li>
-        </ol>
-      </section>
 
       {/* Sign out */}
       <section className="bg-surface-2 border border-border rounded-xl p-5">
