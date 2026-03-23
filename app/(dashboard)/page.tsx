@@ -688,7 +688,7 @@ function TaskRow({
       </span>
 
       {task.is_habit && (
-        <RefreshCw className="w-3 h-3 text-brand-400/60 shrink-0" title="Everyday task" />
+        <span title="Everyday task"><RefreshCw className="w-3 h-3 text-brand-400/60 shrink-0" /></span>
       )}
 
       {!done && (
