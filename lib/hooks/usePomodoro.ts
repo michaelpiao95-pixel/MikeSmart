@@ -82,6 +82,7 @@ export function usePomodoro(
   const endTimeRef = useRef<number | null>(null);
   const sessionStartedAtRef = useRef<Date | null>(null);
   const savedMinutesRef = useRef(0);
+  const lastIncrementalSaveRef = useRef(0);
   const onMinutesSavedRef = useRef(onMinutesSaved);
   onMinutesSavedRef.current = onMinutesSaved;
   const onTransitionRef = useRef(onTransition);
@@ -195,6 +196,12 @@ export function usePomodoro(
 
   // Auto-transition to next phase (called when current phase timer hits 0)
   const transitionToNext = useCallback(async () => {
+    // Yield one microtask so that setIsRunning(false) from the caller
+    // is processed in its own React render cycle. Without this, React 18
+    // batches false+true into one render and the tick useEffect never
+    // sees the change, so no new interval starts.
+    await Promise.resolve();
+
     const cfg = configRef.current;
     const fromPhase = phaseRef.current;
 
@@ -250,6 +257,7 @@ export function usePomodoro(
       if (targetPhase === "focus") {
         sessionStartedAtRef.current = new Date();
         savedMinutesRef.current = 0;
+        lastIncrementalSaveRef.current = Date.now();
       }
 
       setIsRunning(true);
@@ -322,6 +330,14 @@ export function usePomodoro(
         transitionToNext();
       } else {
         setSecondsLeft(remaining);
+        // Save incrementally every 60 seconds while focus is running
+        if (phaseRef.current === "focus" && sessionStartedAtRef.current) {
+          const now = Date.now();
+          if (now - lastIncrementalSaveRef.current >= 60000) {
+            lastIncrementalSaveRef.current = now;
+            saveIncremental(false);
+          }
+        }
       }
     }, 250);
 

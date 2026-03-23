@@ -463,11 +463,19 @@ export default function FocusPage() {
             </div>
             <div className="w-px bg-border" />
             <div>
-              <p className="text-xl font-bold text-foreground tabular-nums">
-                {totalStudyMinutes >= 60
-                  ? `${Math.floor(totalStudyMinutes / 60)}h ${totalStudyMinutes % 60}m`
-                  : `${totalStudyMinutes}m`}
-              </p>
+              {(() => {
+                const subSecs = phase === "focus" ? (config.focusMinutes * 60 - secondsLeft) % 60 : 0;
+                const totalSecs = totalStudyMinutes * 60 + subSecs;
+                const h = Math.floor(totalSecs / 3600);
+                const m = Math.floor((totalSecs % 3600) / 60);
+                const s = totalSecs % 60;
+                const display = h > 0
+                  ? `${h}h ${m}m ${String(s).padStart(2, "0")}s`
+                  : m > 0
+                  ? `${m}m ${String(s).padStart(2, "0")}s`
+                  : `${s}s`;
+                return <p className="text-xl font-bold text-foreground tabular-nums">{display}</p>;
+              })()}
               <p className="text-xs text-muted-foreground">study time</p>
             </div>
           </div>
