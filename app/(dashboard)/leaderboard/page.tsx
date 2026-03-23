@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Trophy } from "lucide-react";
+import { Trophy, Pencil, Check, X } from "lucide-react";
 
 type Period = "daily" | "weekly" | "alltime";
 
@@ -50,6 +50,9 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState<Period>("weekly");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustHours, setAdjustHours] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (p: Period) => {
     setLoading(true);
@@ -62,6 +65,21 @@ export default function LeaderboardPage() {
   useEffect(() => { load(period); }, [period, load]);
 
   const myEntry = entries.find((e) => e.isMe);
+
+  const handleAdjust = async () => {
+    const h = parseFloat(adjustHours);
+    if (isNaN(h) || h < 0) return;
+    setSaving(true);
+    await fetch("/api/leaderboard/adjust", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ period, totalHours: h }),
+    });
+    setSaving(false);
+    setAdjusting(false);
+    setAdjustHours("");
+    load(period);
+  };
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6 animate-fade-in">
@@ -161,8 +179,44 @@ export default function LeaderboardPage() {
 
                 {/* Hours */}
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-bold tabular-nums text-foreground">{entry.hours}h</p>
-                  <p className="text-xs text-muted-foreground">studied</p>
+                  {entry.isMe && adjusting ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={adjustHours}
+                        onChange={(e) => setAdjustHours(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdjust(); if (e.key === "Escape") setAdjusting(false); }}
+                        placeholder={String(entry.hours)}
+                        className="w-16 bg-surface-3 border border-brand-600/40 rounded px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                      <span className="text-xs text-muted-foreground">h</span>
+                      <button onClick={handleAdjust} disabled={saving} className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setAdjusting(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <p className="text-sm font-bold tabular-nums text-foreground">{entry.hours}h</p>
+                        <p className="text-xs text-muted-foreground">studied</p>
+                      </div>
+                      {entry.isMe && (
+                        <button
+                          onClick={() => { setAdjustHours(String(entry.hours)); setAdjusting(true); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title="Adjust your hours"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

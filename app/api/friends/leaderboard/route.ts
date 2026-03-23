@@ -62,13 +62,20 @@ export async function GET(request: NextRequest) {
     if (!minutesByUser.has(id)) minutesByUser.set(id, 0);
   }
 
-  // Fetch profiles
+  // Fetch profiles (including the user's own adjustment)
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, email, full_name, avatar_url")
+    .select("id, email, full_name, avatar_url, leaderboard_adjustments")
     .in("id", allIds);
 
   const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+
+  // Apply the current user's adjustment for this period
+  const myAdjustments = (profileMap[user.id]?.leaderboard_adjustments as Record<string, number>) ?? {};
+  const myAdjustmentMinutes = myAdjustments[period] ?? 0;
+  if (myAdjustmentMinutes !== 0) {
+    minutesByUser.set(user.id, Math.max(0, (minutesByUser.get(user.id) ?? 0) + myAdjustmentMinutes));
+  }
 
   // Build ranked list
   const ranked = [...minutesByUser.entries()]
