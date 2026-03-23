@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Trophy, Pencil, Check, X, Ban, ShieldOff } from "lucide-react";
+import { Trophy, Pencil, Check, X, Ban, ShieldOff, ChevronDown, ChevronUp } from "lucide-react";
 
 type Period = "daily" | "weekly" | "alltime";
 
@@ -18,6 +18,15 @@ interface LeaderboardEntry {
   isBanned: boolean;
   isPermanentBan: boolean;
   bannedUntil: string | null;
+}
+
+interface BannedUser {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  bannedUntil: string;
+  isPermanent: boolean;
 }
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -59,6 +68,19 @@ export default function LeaderboardPage() {
   const [saving, setSaving] = useState(false);
   const [banTarget, setBanTarget] = useState<LeaderboardEntry | null>(null);
   const [banHours, setBanHours] = useState<number>(24);
+  const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
+  const [showBannedPanel, setShowBannedPanel] = useState(false);
+  const [loadingBanned, setLoadingBanned] = useState(false);
+
+  const loadBanned = useCallback(async () => {
+    setLoadingBanned(true);
+    const res = await fetch("/api/admin/banned");
+    if (res.ok) {
+      const json = await res.json();
+      setBannedUsers(json.data ?? []);
+    }
+    setLoadingBanned(false);
+  }, []);
 
   const load = useCallback(async (p: Period) => {
     setLoading(true);
@@ -109,6 +131,7 @@ export default function LeaderboardPage() {
       body: JSON.stringify({ userId }),
     });
     load(period);
+    loadBanned();
   };
 
   return (
@@ -289,6 +312,71 @@ export default function LeaderboardPage() {
                 <p className="text-sm font-medium text-brand-400">Your position</p>
                 <p className="text-xs text-muted-foreground">{myEntry.hours}h studied</p>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Admin — Banned Users panel */}
+      {isAdmin && (
+        <div className="bg-surface-2 border border-red-900/30 rounded-xl overflow-hidden">
+          <button
+            onClick={() => {
+              if (!showBannedPanel) loadBanned();
+              setShowBannedPanel((v) => !v);
+            }}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-950/10 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Ban className="w-4 h-4" />
+              Banned Users
+              {bannedUsers.length > 0 && (
+                <span className="text-xs bg-red-600/20 text-red-400 border border-red-600/30 px-1.5 py-0.5 rounded-full">
+                  {bannedUsers.length}
+                </span>
+              )}
+            </span>
+            {showBannedPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showBannedPanel && (
+            <div className="border-t border-red-900/20 divide-y divide-border">
+              {loadingBanned ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-4 h-4 border-2 border-border border-t-red-500 rounded-full animate-spin" />
+                </div>
+              ) : bannedUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">No users are currently banned.</p>
+              ) : (
+                bannedUsers.map((u) => {
+                  const until = new Date(u.bannedUntil);
+                  return (
+                    <div key={u.userId} className="flex items-center gap-3 px-4 py-3">
+                      <Avatar name={u.fullName} email={u.email} avatarUrl={u.avatarUrl} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {u.fullName ?? u.email.split("@")[0]}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {u.email}
+                        </p>
+                        <p className="text-xs text-red-400 mt-0.5">
+                          {u.isPermanent
+                            ? "Permanently banned"
+                            : `Banned until ${until.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${until.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleUnban(u.userId)}
+                        className="shrink-0 flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-900/30 px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        <ShieldOff className="w-3.5 h-3.5" />
+                        Unban
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>
