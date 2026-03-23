@@ -7,7 +7,21 @@ export async function POST(request: NextRequest) {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { period, totalHours } = await request.json();
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+
+  // Check if current user is admin
+  const { data: myProfile } = await admin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .single();
+  const isAdmin = myProfile?.is_admin === true;
+
+  const { period, totalHours, userId } = await request.json();
   if (!["daily", "weekly", "alltime"].includes(period)) {
     return NextResponse.json({ error: "Invalid period" }, { status: 400 });
   }
@@ -15,11 +29,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid hours" }, { status: 400 });
   }
 
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  // Only admins can adjust hours
+  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const targetId = userId ?? user.id;
 
   // Get current system minutes for this period
   let since: string | null = null;
@@ -32,7 +44,7 @@ export async function POST(request: NextRequest) {
     since = d.toISOString();
   }
 
-  let query = admin.from("pomodoro_sessions").select("duration_minutes").eq("user_id", user.id);
+  let query = admin.from("pomodoro_sessions").select("duration_minutes").eq("user_id", targetId);
   if (since) query = query.gte("started_at", since);
   const { data: sessions } = await query;
 
@@ -40,20 +52,16 @@ export async function POST(request: NextRequest) {
   const desiredMinutes = Math.round(totalHours * 60);
   const adjustmentMinutes = desiredMinutes - systemMinutes;
 
-  // Fetch existing adjustments
   const { data: profile } = await admin
     .from("profiles")
     .select("leaderboard_adjustments")
-    .eq("id", user.id)
+    .eq("id", targetId)
     .single();
 
   const existing = (profile?.leaderboard_adjustments as Record<string, number>) ?? {};
   const updated = { ...existing, [period]: adjustmentMinutes };
 
-  await admin
-    .from("profiles")
-    .update({ leaderboard_adjustments: updated })
-    .eq("id", user.id);
+  await admin.from("profiles").update({ leaderboard_adjustments: updated }).eq("id", targetId);
 
   return NextResponse.json({ ok: true });
 }

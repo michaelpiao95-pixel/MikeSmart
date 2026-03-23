@@ -62,13 +62,15 @@ export async function GET(request: NextRequest) {
     if (!minutesByUser.has(id)) minutesByUser.set(id, 0);
   }
 
-  // Fetch profiles (including the user's own adjustment)
+  // Fetch profiles
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, email, full_name, avatar_url, leaderboard_adjustments")
+    .select("id, email, full_name, avatar_url, leaderboard_adjustments, is_admin, banned_until")
     .in("id", allIds);
 
   const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+  const isAdmin = profileMap[user.id]?.is_admin === true;
+  const nowTs = new Date();
 
   // Apply each user's adjustment for this period
   for (const id of allIds) {
@@ -79,18 +81,28 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Build ranked list
+  // Build ranked list — admins see banned users with a flag; others don't see them
   const ranked = [...minutesByUser.entries()]
-    .map(([id, minutes]) => ({
-      userId: id,
-      isMe: id === user.id,
-      email: profileMap[id]?.email ?? "",
-      fullName: profileMap[id]?.full_name ?? null,
-      avatarUrl: profileMap[id]?.avatar_url ?? null,
-      hours: +(minutes / 60).toFixed(1),
-    }))
+    .map(([id, minutes]) => {
+      const profile = profileMap[id];
+      const bannedUntil = profile?.banned_until ? new Date(profile.banned_until) : null;
+      const isBanned = bannedUntil ? bannedUntil > nowTs : false;
+      const isPermanentBan = isBanned && bannedUntil!.getFullYear() >= 2099;
+      return {
+        userId: id,
+        isMe: id === user.id,
+        email: profile?.email ?? "",
+        fullName: profile?.full_name ?? null,
+        avatarUrl: profile?.avatar_url ?? null,
+        hours: +(minutes / 60).toFixed(1),
+        isBanned,
+        isPermanentBan,
+        bannedUntil: bannedUntil?.toISOString() ?? null,
+      };
+    })
+    .filter((e) => isAdmin || !e.isBanned || e.isMe)
     .sort((a, b) => b.hours - a.hours)
-    .map((entry, i) => ({ ...entry, rank: i + 1 }));
+    .map((entry, i) => ({ ...entry, rank: i + 1, isAdmin }));
 
   return NextResponse.json({ data: ranked });
 }

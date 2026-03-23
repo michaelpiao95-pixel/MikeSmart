@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Trophy, Pencil, Check, X } from "lucide-react";
+import { Trophy, Pencil, Check, X, Ban, ShieldOff } from "lucide-react";
 
 type Period = "daily" | "weekly" | "alltime";
 
@@ -10,10 +10,14 @@ interface LeaderboardEntry {
   rank: number;
   userId: string;
   isMe: boolean;
+  isAdmin: boolean;
   email: string;
   fullName: string | null;
   avatarUrl: string | null;
   hours: number;
+  isBanned: boolean;
+  isPermanentBan: boolean;
+  bannedUntil: string | null;
 }
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -50,9 +54,11 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState<Period>("weekly");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adjusting, setAdjusting] = useState(false);
+  const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [adjustHours, setAdjustHours] = useState("");
   const [saving, setSaving] = useState(false);
+  const [banTarget, setBanTarget] = useState<LeaderboardEntry | null>(null);
+  const [banHours, setBanHours] = useState<number>(24);
 
   const load = useCallback(async (p: Period) => {
     setLoading(true);
@@ -66,18 +72,42 @@ export default function LeaderboardPage() {
 
   const myEntry = entries.find((e) => e.isMe);
 
-  const handleAdjust = async () => {
+  const isAdmin = entries.some((e) => e.isMe && e.isAdmin);
+
+  const handleAdjust = async (userId: string) => {
     const h = parseFloat(adjustHours);
     if (isNaN(h) || h < 0) return;
     setSaving(true);
     await fetch("/api/leaderboard/adjust", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ period, totalHours: h }),
+      body: JSON.stringify({ period, totalHours: h, userId }),
     });
     setSaving(false);
-    setAdjusting(false);
+    setAdjustingId(null);
     setAdjustHours("");
+    load(period);
+  };
+
+  const handleBan = async () => {
+    if (!banTarget) return;
+    setSaving(true);
+    await fetch("/api/admin/ban", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: banTarget.userId, hours: banHours }),
+    });
+    setSaving(false);
+    setBanTarget(null);
+    load(period);
+  };
+
+  const handleUnban = async (userId: string) => {
+    await fetch("/api/admin/ban", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
     load(period);
   };
 
@@ -177,9 +207,29 @@ export default function LeaderboardPage() {
                   <p className="text-xs text-muted-foreground truncate">{entry.email}</p>
                 </div>
 
-                {/* Hours */}
-                <div className="text-right shrink-0">
-                  {entry.isMe && adjusting ? (
+                {/* Hours + admin controls */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isAdmin && !entry.isMe && (
+                    entry.isBanned ? (
+                      <button
+                        onClick={() => handleUnban(entry.userId)}
+                        className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                        title="Unban"
+                      >
+                        <ShieldOff className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setBanTarget(entry); setBanHours(24); }}
+                        className="text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Ban user"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                      </button>
+                    )
+                  )}
+
+                  {adjustingId === entry.userId ? (
                     <div className="flex items-center gap-1.5">
                       <input
                         autoFocus
@@ -188,29 +238,37 @@ export default function LeaderboardPage() {
                         step="0.1"
                         value={adjustHours}
                         onChange={(e) => setAdjustHours(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleAdjust(); if (e.key === "Escape") setAdjusting(false); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdjust(entry.userId); if (e.key === "Escape") setAdjustingId(null); }}
                         placeholder={String(entry.hours)}
                         className="w-16 bg-surface-3 border border-brand-600/40 rounded px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
                       />
                       <span className="text-xs text-muted-foreground">h</span>
-                      <button onClick={handleAdjust} disabled={saving} className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                      <button onClick={() => handleAdjust(entry.userId)} disabled={saving} className="text-emerald-400 hover:text-emerald-300 transition-colors">
                         <Check className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setAdjusting(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <button onClick={() => setAdjustingId(null)} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <div>
-                        <p className="text-sm font-bold tabular-nums text-foreground">{entry.hours}h</p>
-                        <p className="text-xs text-muted-foreground">studied</p>
+                      <div className="text-right">
+                        <p className={cn("text-sm font-bold tabular-nums", entry.isBanned ? "text-red-400 line-through" : "text-foreground")}>
+                          {entry.hours}h
+                        </p>
+                        {entry.isBanned ? (
+                          <p className="text-xs text-red-400">
+                            {entry.isPermanentBan ? "Perm banned" : `Banned`}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">studied</p>
+                        )}
                       </div>
-                      {entry.isMe && (
+                      {isAdmin && !entry.isBanned && (
                         <button
-                          onClick={() => { setAdjustHours(String(entry.hours)); setAdjusting(true); }}
+                          onClick={() => { setAdjustHours(String(entry.hours)); setAdjustingId(entry.userId); }}
                           className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Adjust your hours"
+                          title="Adjust hours"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -233,6 +291,58 @@ export default function LeaderboardPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Ban modal */}
+      {banTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-1 border border-border rounded-xl p-6 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Ban className="w-4 h-4 text-red-400" />
+                Ban {banTarget.fullName ?? banTarget.email}
+              </h3>
+              <button onClick={() => setBanTarget(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1.5">Duration</label>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { label: "1h", value: 1 },
+                  { label: "24h", value: 24 },
+                  { label: "48h", value: 48 },
+                  { label: "72h", value: 72 },
+                  { label: "Forever", value: -1 },
+                ].map(({ label, value }) => (
+                  <button
+                    key={value}
+                    onClick={() => setBanHours(value)}
+                    className={cn(
+                      "flex-1 py-2 rounded-lg text-sm font-medium border transition-all",
+                      banHours === value
+                        ? value === -1
+                          ? "bg-red-700/30 border-red-600/50 text-red-300"
+                          : "bg-red-600/20 border-red-600/40 text-red-400"
+                        : "bg-surface-3 border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setBanTarget(null)} className="flex-1 py-2 rounded-lg text-sm border border-border bg-surface-3 text-muted-foreground hover:text-foreground transition-all">
+                Cancel
+              </button>
+              <button onClick={handleBan} disabled={saving} className="flex-1 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium transition-all">
+                {saving ? "Banning..." : "Confirm Ban"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

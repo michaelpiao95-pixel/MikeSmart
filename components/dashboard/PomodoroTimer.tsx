@@ -1,30 +1,37 @@
 "use client";
 
-import { usePomodoro, DEFAULT_CONFIG, type PomodoroPhase } from "@/lib/hooks/usePomodoro";
+import { usePomodoroContext } from "@/lib/contexts/PomodoroContext";
 import { formatTimer } from "@/lib/utils";
 import { Play, Pause, Square, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PomodoroPhase } from "@/lib/hooks/usePomodoro";
 
 const PHASE_LABELS: Record<PomodoroPhase, string> = {
   idle: "Ready",
-  focus: "Deep Work",
-  short_break: "Short Break",
+  focus: "Focus",
+  short_break: "Break",
   long_break: "Long Break",
 };
 
-const PHASE_COLORS: Record<PomodoroPhase, string> = {
-  idle: "text-muted-foreground",
-  focus: "text-brand-400",
-  short_break: "text-emerald-400",
-  long_break: "text-blue-400",
+const RING_COLOR: Record<PomodoroPhase, string> = {
+  idle:        "#374151",
+  focus:       "#818cf8",
+  short_break: "#34d399",
+  long_break:  "#60a5fa",
 };
 
-const PHASE_BG: Record<PomodoroPhase, string> = {
-  idle: "",
-  focus: "stroke-brand-500",
-  short_break: "stroke-emerald-500",
-  long_break: "stroke-blue-500",
+const PHASE_TEXT_CLASS: Record<PomodoroPhase, string> = {
+  idle:        "text-muted-foreground",
+  focus:       "text-indigo-400",
+  short_break: "text-emerald-400",
+  long_break:  "text-blue-400",
 };
+
+const SIZE = 128;
+const R = 54;
+const CIRCUM = 2 * Math.PI * R;
+const CX = SIZE / 2;
+const CY = SIZE / 2;
 
 export function PomodoroTimer() {
   const {
@@ -38,22 +45,22 @@ export function PomodoroTimer() {
     resume,
     stop,
     skip,
-  } = usePomodoro(DEFAULT_CONFIG);
+    config,
+  } = usePomodoroContext();
 
-  const circumference = 2 * Math.PI * 54; // r=54
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+  const color = RING_COLOR[phase];
 
   return (
     <div className="bg-surface-2 border border-border rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-foreground">Deep Work Timer</h3>
         <div className="flex gap-1">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: config.sessionsBeforeLongBreak }).map((_, i) => (
             <div
               key={i}
               className={cn(
                 "w-2 h-2 rounded-full transition-all",
-                i < sessionsCompleted % 4
+                i < sessionsCompleted % config.sessionsBeforeLongBreak
                   ? "bg-brand-500"
                   : "bg-surface-4"
               )}
@@ -63,37 +70,37 @@ export function PomodoroTimer() {
       </div>
 
       <div className="flex items-center gap-6">
-        {/* Ring timer */}
-        <div className="relative shrink-0">
-          <svg width="128" height="128" className="-rotate-90">
+        {/* Ring — same style as Focus page TimerRing */}
+        <div
+          className="relative shrink-0 flex items-center justify-center"
+          style={{ width: SIZE, height: SIZE }}
+        >
+          <svg
+            width={SIZE}
+            height={SIZE}
+            viewBox={`0 0 ${SIZE} ${SIZE}`}
+            style={{ transform: "rotate(-90deg) scale(-1, 1)", transformOrigin: "center" }}
+          >
             {/* Track */}
+            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#1f2937" strokeWidth={8} />
+            {/* Progress arc */}
             <circle
-              cx="64"
-              cy="64"
-              r="54"
+              cx={CX} cy={CY} r={R}
               fill="none"
-              className="stroke-surface-4"
-              strokeWidth="6"
-            />
-            {/* Progress */}
-            <circle
-              cx="64"
-              cy="64"
-              r="54"
-              fill="none"
-              className={cn("transition-all duration-1000", PHASE_BG[phase])}
-              strokeWidth="6"
+              stroke={color}
+              strokeWidth={8}
               strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={phase === "idle" ? circumference : strokeDashoffset}
+              strokeDasharray={CIRCUM}
+              strokeDashoffset={CIRCUM * progress}
+              style={{ transition: "stroke-dashoffset 0.25s linear, stroke 0.6s ease" }}
             />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold font-mono text-foreground tabular-nums">
-              {formatTimer(secondsLeft)}
-            </span>
-            <span className={cn("text-xs font-medium mt-0.5", PHASE_COLORS[phase])}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+            <span className={cn("text-xs font-semibold uppercase tracking-widest", PHASE_TEXT_CLASS[phase])}>
               {PHASE_LABELS[phase]}
+            </span>
+            <span className="text-xl font-bold font-mono text-foreground tabular-nums">
+              {formatTimer(secondsLeft)}
             </span>
           </div>
         </div>
@@ -149,11 +156,11 @@ export function PomodoroTimer() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-brand-500" />
-              <span className="text-xs text-muted-foreground">25 min focus</span>
+              <span className="text-xs text-muted-foreground">{config.focusMinutes} min focus</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-xs text-muted-foreground">5 min break</span>
+              <span className="text-xs text-muted-foreground">{config.shortBreakMinutes} min break</span>
             </div>
             <div className="text-xs text-muted-foreground mt-2">
               Sessions today:{" "}

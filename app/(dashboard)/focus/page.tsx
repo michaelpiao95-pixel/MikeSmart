@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { usePomodoro, type PomodoroConfig, DEFAULT_CONFIG, type PomodoroPhase } from "@/lib/hooks/usePomodoro";
+import { type PomodoroConfig, DEFAULT_CONFIG, type PomodoroPhase } from "@/lib/hooks/usePomodoro";
+import { usePomodoroContext } from "@/lib/contexts/PomodoroContext";
 import { useStreaks } from "@/lib/hooks/useStreak";
 import { formatTimer, todayISO } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -174,32 +175,29 @@ function TimerRing({ phase, secondsLeft, progress, glowing, size = 220 }: TimerR
   );
 }
 
-const CONFIG_LS_KEY = "pomodoro_config_v1";
-
-function loadConfig(): PomodoroConfig {
-  try {
-    const raw = localStorage.getItem(CONFIG_LS_KEY);
-    if (raw) return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-  } catch {}
-  return DEFAULT_CONFIG;
-}
-
 export default function FocusPage() {
   const [glowing, setGlowing] = useState(false);
   const glowTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [config, setConfig] = useState<PomodoroConfig>(DEFAULT_CONFIG);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Load config from localStorage once on mount
-  useEffect(() => { setConfig(loadConfig()); }, []);
+  const {
+    phase, secondsLeft, isRunning, sessionsCompleted, progress,
+    start, pause, resume, stop, skip, resetSessions,
+    config, updateConfig,
+    totalStudyMinutes, setTotalStudyMinutes,
+    setTransitionCallback,
+  } = usePomodoroContext();
 
-  const updateConfig = (updates: Partial<PomodoroConfig>) => {
-    setConfig((prev) => {
-      const next = { ...prev, ...updates };
-      try { localStorage.setItem(CONFIG_LS_KEY, JSON.stringify(next)); } catch {}
-      return next;
+  // Register chime + glow handler for phase transitions
+  useEffect(() => {
+    setTransitionCallback((_from: PomodoroPhase, _to: PomodoroPhase) => {
+      playChime();
+      setGlowing(true);
+      if (glowTimeout.current) clearTimeout(glowTimeout.current);
+      glowTimeout.current = setTimeout(() => setGlowing(false), 700);
     });
-  };
+    return () => setTransitionCallback(null);
+  }, [setTransitionCallback]);
 
   // 3-2-1 countdown before starting/resuming
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -235,23 +233,12 @@ export default function FocusPage() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [countdown]);
 
-  const handleTransition = useCallback((_from: PomodoroPhase, _to: PomodoroPhase) => {
-    playChime();
-    setGlowing(true);
-    if (glowTimeout.current) clearTimeout(glowTimeout.current);
-    glowTimeout.current = setTimeout(() => setGlowing(false), 700);
-  }, []);
-
-  const { phase, secondsLeft, isRunning, sessionsCompleted, progress, start, pause, resume, stop, skip, resetSessions } =
-    usePomodoro(config, (minutes) => setTotalStudyMinutes((prev) => prev + minutes), handleTransition);
-
   const { getStreak, refresh: refreshStreaks } = useStreaks();
   const [focusMode, setFocusMode] = useState(false);
   const [reflection, setReflection] = useState<Partial<DailyReflection>>({
     wins: "", mistakes: "", improvements: "", mood: 3,
   });
   const [reflectionSaved, setReflectionSaved] = useState(false);
-  const [totalStudyMinutes, setTotalStudyMinutes] = useState(0);
   const supabase = useRef(createClient()).current;
 
   const handleReset = useCallback(async () => {

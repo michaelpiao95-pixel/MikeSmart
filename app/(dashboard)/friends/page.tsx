@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Users, UserPlus, Search, Check, X, Clock, UserCheck } from "lucide-react";
+import { Users, UserPlus, Search, Check, X, Clock, UserCheck, Zap } from "lucide-react";
 
 interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   avatar_url?: string | null;
+}
+
+interface DiscoverProfile extends Profile {
+  mutuals: number;
 }
 
 interface FriendRequest {
@@ -59,6 +63,11 @@ export default function FriendsPage() {
   const [searching, setSearching] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  const [discover, setDiscover] = useState<DiscoverProfile[]>([]);
+  const [loadingDiscover, setLoadingDiscover] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+
   const loadFriends = useCallback(async () => {
     setLoadingFriends(true);
     const [friendsRes, requestsRes] = await Promise.all([
@@ -73,7 +82,19 @@ export default function FriendsPage() {
     setLoadingFriends(false);
   }, []);
 
+  const loadDiscover = useCallback(async () => {
+    setLoadingDiscover(true);
+    const res = await fetch("/api/friends/discover");
+    const json = await res.json();
+    setDiscover(json.data ?? []);
+    setLoadingDiscover(false);
+  }, []);
+
   useEffect(() => { loadFriends(); }, [loadFriends]);
+
+  useEffect(() => {
+    if (tab === "add") loadDiscover();
+  }, [tab, loadDiscover]);
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +111,25 @@ export default function FriendsPage() {
       setSendResult({ ok: true, message: "Friend request sent!" });
       setSearchEmail("");
       loadFriends();
+      loadDiscover();
     } else {
       setSendResult({ ok: false, message: json.error ?? "Something went wrong" });
     }
     setSearching(false);
+  };
+
+  const handleQuickAdd = async (profile: DiscoverProfile) => {
+    setSendingId(profile.id);
+    const res = await fetch("/api/friends/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: profile.email }),
+    });
+    if (res.ok) {
+      setSentIds((prev) => new Set(prev).add(profile.id));
+      loadFriends();
+    }
+    setSendingId(null);
   };
 
   const handleRespond = async (id: string, action: "accept" | "decline") => {
@@ -103,6 +139,7 @@ export default function FriendsPage() {
       body: JSON.stringify({ action }),
     });
     loadFriends();
+    loadDiscover();
   };
 
   const pendingCount = incoming.length;
@@ -179,7 +216,7 @@ export default function FriendsPage() {
 
       {tab === "add" && (
         <div className="space-y-5">
-          {/* Send request */}
+          {/* Send request by email */}
           <div className="bg-surface-2 border border-border rounded-xl p-5">
             <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-400" />
@@ -211,6 +248,65 @@ export default function FriendsPage() {
               )}>
                 {sendResult.message}
               </p>
+            )}
+          </div>
+
+          {/* Quick Add — all users on the platform */}
+          <div className="bg-surface-2 border border-border rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              Quick Add
+              <span className="text-xs text-muted-foreground font-normal">— everyone on the app</span>
+            </h3>
+            {loadingDiscover ? (
+              <div className="flex justify-center py-6">
+                <div className="w-5 h-5 border-2 border-border border-t-brand-500 rounded-full animate-spin" />
+              </div>
+            ) : discover.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No one else to add right now.</p>
+            ) : (
+              <div className="space-y-2">
+                {discover.map((profile) => {
+                  const sent = sentIds.has(profile.id);
+                  return (
+                    <div key={profile.id} className="flex items-center gap-3">
+                      <Avatar name={profile.full_name} email={profile.email} avatarUrl={profile.avatar_url} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {profile.full_name ?? profile.email.split("@")[0]}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {profile.full_name ? profile.email : null}
+                          {profile.mutuals > 0 && (
+                            <span className={cn(profile.full_name ? "ml-1.5" : "", "text-brand-400/80")}>
+                              {profile.mutuals} mutual{profile.mutuals !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {!profile.full_name && profile.mutuals === 0 && profile.email}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleQuickAdd(profile)}
+                        disabled={sent || sendingId === profile.id}
+                        className={cn(
+                          "shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1",
+                          sent
+                            ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-400 cursor-default"
+                            : "bg-brand-600/20 border-brand-600/30 text-brand-400 hover:bg-brand-600/30"
+                        )}
+                      >
+                        {sent ? (
+                          <><Check className="w-3 h-3" /> Sent</>
+                        ) : sendingId === profile.id ? (
+                          "..."
+                        ) : (
+                          <><UserPlus className="w-3 h-3" /> Add</>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 
 export type PomodoroPhase = "focus" | "short_break" | "long_break" | "idle";
@@ -196,12 +197,6 @@ export function usePomodoro(
 
   // Auto-transition to next phase (called when current phase timer hits 0)
   const transitionToNext = useCallback(async () => {
-    // Yield one microtask so that setIsRunning(false) from the caller
-    // is processed in its own React render cycle. Without this, React 18
-    // batches false+true into one render and the tick useEffect never
-    // sees the change, so no new interval starts.
-    await Promise.resolve();
-
     const cfg = configRef.current;
     const fromPhase = phaseRef.current;
 
@@ -325,8 +320,13 @@ export function usePomodoro(
       if (remaining <= 0) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
-        setSecondsLeft(0);
-        setIsRunning(false);
+        // flushSync forces React to render isRunning=false before transitionToNext
+        // runs, preventing React 18's automatic batching from merging the false+true
+        // updates into a no-op (which would leave the interval useEffect stuck).
+        flushSync(() => {
+          setSecondsLeft(0);
+          setIsRunning(false);
+        });
         transitionToNext();
       } else {
         setSecondsLeft(remaining);

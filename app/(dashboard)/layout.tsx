@@ -6,7 +6,8 @@ import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useCommandPalette } from "@/lib/hooks/useCommandPalette";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Ban } from "lucide-react";
+import { PomodoroProvider } from "@/lib/contexts/PomodoroContext";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
 }) {
   const { open, setOpen } = useCommandPalette();
   const [dbMissing, setDbMissing] = useState(false);
+  const [banInfo, setBanInfo] = useState<{ banned: boolean; bannedUntil: string | null; isPermanent: boolean } | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -25,6 +27,34 @@ export default function DashboardLayout({
       .then((json) => { if (!json.ok) setDbMissing(true); })
       .catch(() => {});
   }, [pathname]);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((json) => { if (json.banned) setBanInfo(json); })
+      .catch(() => {});
+  }, []);
+
+  if (banInfo?.banned) {
+    const until = banInfo.bannedUntil ? new Date(banInfo.bannedUntil) : null;
+    return (
+      <div className="flex h-screen items-center justify-center bg-surface-0 p-6">
+        <div className="text-center max-w-sm space-y-4">
+          <div className="w-14 h-14 rounded-full bg-red-600/10 border border-red-600/20 flex items-center justify-center mx-auto">
+            <Ban className="w-7 h-7 text-red-400" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">You&apos;ve been banned.</h1>
+          <p className="text-sm text-muted-foreground">
+            {banInfo.isPermanent
+              ? "You have been permanently banned from this platform."
+              : until
+                ? `Come back when the ban period ends. Your ban expires on ${until.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })} at ${until.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}.`
+                : "Come back when the ban period ends."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-0">
@@ -71,7 +101,7 @@ export default function DashboardLayout({
           </div>
         )}
 
-        {children}
+        <PomodoroProvider>{children}</PomodoroProvider>
       </main>
 
       {/* Command Palette */}
