@@ -36,13 +36,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  // Filter habits by day of week
+  // Filter habits by day of week, and reset their status if completed on a different day
   const dayOfWeek = new Date(date).getDay();
-  const filtered = (data ?? []).filter((task) => {
-    if (!task.is_habit) return true;
-    if (!task.habit_days || task.habit_days.length === 0) return true;
-    return task.habit_days.includes(dayOfWeek);
-  });
+  const filtered = (data ?? [])
+    .filter((task) => {
+      if (!task.is_habit) return true;
+      if (!task.habit_days || task.habit_days.length === 0) return true;
+      return task.habit_days.includes(dayOfWeek);
+    })
+    .map((task) => {
+      if (!task.is_habit) return task;
+      const completedDate = task.completed_at?.split("T")[0];
+      if (task.status === "completed" && completedDate !== date) {
+        return { ...task, status: "pending", completed_at: null };
+      }
+      return task;
+    });
 
   return NextResponse.json({ data: filtered });
 }

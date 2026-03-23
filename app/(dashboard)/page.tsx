@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, AlertCircle, BookOpen, Trophy } from "lucide-react";
+import { Plus, Trash2, AlertCircle, BookOpen, Trophy, Pencil, Check, X, RefreshCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PomodoroTimer } from "@/components/dashboard/PomodoroTimer";
 import { DailyScore } from "@/components/dashboard/DailyScore";
@@ -27,6 +27,7 @@ export default function TodayPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskCategory, setNewTaskCategory] = useState<"academic" | "personal">("personal");
   const [newTaskDifficulty, setNewTaskDifficulty] = useState<"low" | "medium" | "high">("medium");
+  const [newTaskIsHabit, setNewTaskIsHabit] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   const [profile, setProfile] = useState<{ canvas_last_synced_at?: string } | null>(null);
   const [studyMinutes, setStudyMinutes] = useState(0);
@@ -209,6 +210,8 @@ export default function TodayPage() {
         category: newTaskCategory,
         scheduled_date: today,
         priority: newTaskDifficulty,
+        is_habit: newTaskIsHabit,
+        habit_days: newTaskIsHabit ? [0, 1, 2, 3, 4, 5, 6] : [],
       }),
     });
 
@@ -216,8 +219,18 @@ export default function TodayPage() {
     if (json.data) {
       setTasks((prev) => [...prev, json.data]);
       setNewTaskTitle("");
+      setNewTaskIsHabit(false);
     }
     setAddingTask(false);
+  };
+
+  const handleEditTask = async (id: string, updates: Partial<Task>) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+    await fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
   };
 
   const handleDeleteTask = async (id: string) => {
@@ -391,37 +404,52 @@ export default function TodayPage() {
         </h2>
 
         {/* Add task form */}
-        <form onSubmit={handleAddTask} className="flex gap-2 mb-4">
-          <select
-            value={newTaskCategory}
-            onChange={(e) => setNewTaskCategory(e.target.value as "academic" | "personal")}
-            className="bg-surface-3 border border-border rounded-lg px-2 py-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
-          >
-            <option value="personal">Personal</option>
-            <option value="academic">Academic</option>
-          </select>
-          <select
-            value={newTaskDifficulty}
-            onChange={(e) => setNewTaskDifficulty(e.target.value as "low" | "medium" | "high")}
-            className="bg-surface-3 border border-border rounded-lg px-2 py-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
-          >
-            <option value="low">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="high">Hard</option>
-          </select>
-          <input
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            placeholder="Add a task..."
-            className="flex-1 bg-surface-3 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
-          />
+        <form onSubmit={handleAddTask} className="flex flex-col gap-2 mb-4">
+          <div className="flex gap-2">
+            <select
+              value={newTaskCategory}
+              onChange={(e) => setNewTaskCategory(e.target.value as "academic" | "personal")}
+              className="bg-surface-3 border border-border rounded-lg px-2 py-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="personal">Personal</option>
+              <option value="academic">Academic</option>
+            </select>
+            <select
+              value={newTaskDifficulty}
+              onChange={(e) => setNewTaskDifficulty(e.target.value as "low" | "medium" | "high")}
+              className="bg-surface-3 border border-border rounded-lg px-2 py-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="low">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="high">Hard</option>
+            </select>
+            <input
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              placeholder="Add a task..."
+              className="flex-1 bg-surface-3 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+            />
+            <button
+              type="submit"
+              disabled={addingTask || !newTaskTitle.trim()}
+              className="bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </button>
+          </div>
           <button
-            type="submit"
-            disabled={addingTask || !newTaskTitle.trim()}
-            className="bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium"
+            type="button"
+            onClick={() => setNewTaskIsHabit((v) => !v)}
+            className={cn(
+              "self-start flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all",
+              newTaskIsHabit
+                ? "bg-brand-600/20 border-brand-600/40 text-brand-400"
+                : "bg-surface-3 border-border text-muted-foreground hover:text-foreground"
+            )}
           >
-            <Plus className="w-4 h-4" />
-            Add
+            <RefreshCw className="w-3 h-3" />
+            {newTaskIsHabit ? "Everyday (on)" : "Everyday"}
           </button>
         </form>
 
@@ -439,6 +467,7 @@ export default function TodayPage() {
                   task={t}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
+                  onEdit={handleEditTask}
                 />
               ))}
             </div>
@@ -459,6 +488,7 @@ export default function TodayPage() {
                   task={t}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
+                  onEdit={handleEditTask}
                 />
               ))}
             </div>
@@ -478,6 +508,7 @@ export default function TodayPage() {
                   task={t}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
+                  onEdit={handleEditTask}
                 />
               ))}
             </div>
@@ -539,13 +570,95 @@ function TaskRow({
   task,
   onToggle,
   onDelete,
+  onEdit,
 }: {
   task: Task;
   onToggle: (t: Task) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, updates: Partial<Task>) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(task.title);
+  const [editPriority, setEditPriority] = useState(task.priority);
+  const [editCategory, setEditCategory] = useState(task.category);
+  const [editIsHabit, setEditIsHabit] = useState(task.is_habit);
+
   const done = task.status === "completed";
   const p = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium;
+
+  const handleSave = () => {
+    if (!editTitle.trim()) return;
+    onEdit(task.id, {
+      title: editTitle.trim(),
+      priority: editPriority,
+      category: editCategory,
+      is_habit: editIsHabit,
+      habit_days: editIsHabit ? [0, 1, 2, 3, 4, 5, 6] : [],
+    });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditTitle(task.title);
+    setEditPriority(task.priority);
+    setEditCategory(task.category);
+    setEditIsHabit(task.is_habit);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="bg-surface-2 border border-brand-600/40 rounded-lg px-3 py-2.5 space-y-2">
+        <input
+          autoFocus
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") handleCancel(); }}
+          className="w-full bg-surface-3 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={editCategory}
+            onChange={(e) => setEditCategory(e.target.value as "academic" | "personal")}
+            className="bg-surface-3 border border-border rounded-lg px-2 py-1 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="personal">Personal</option>
+            <option value="academic">Academic</option>
+          </select>
+          <select
+            value={editPriority}
+            onChange={(e) => setEditPriority(e.target.value as "low" | "medium" | "high")}
+            className="bg-surface-3 border border-border rounded-lg px-2 py-1 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="low">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="high">Hard</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setEditIsHabit((v) => !v)}
+            className={cn(
+              "flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-all",
+              editIsHabit
+                ? "bg-brand-600/20 border-brand-600/40 text-brand-400"
+                : "bg-surface-3 border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <RefreshCw className="w-3 h-3" />
+            Everyday
+          </button>
+          <div className="flex gap-1.5 ml-auto">
+            <button onClick={handleSave} className="flex items-center gap-1 text-xs bg-brand-600 hover:bg-brand-700 text-white px-2.5 py-1 rounded-lg transition-all">
+              <Check className="w-3 h-3" /> Save
+            </button>
+            <button onClick={handleCancel} className="flex items-center gap-1 text-xs bg-surface-3 hover:bg-surface-4 border border-border text-muted-foreground px-2.5 py-1 rounded-lg transition-all">
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -570,14 +683,13 @@ function TaskRow({
         )}
       </button>
 
-      <span
-        className={cn(
-          "flex-1 text-sm",
-          done ? "line-through text-muted-foreground" : "text-foreground"
-        )}
-      >
+      <span className={cn("flex-1 text-sm", done ? "line-through text-muted-foreground" : "text-foreground")}>
         {task.title}
       </span>
+
+      {task.is_habit && (
+        <RefreshCw className="w-3 h-3 text-brand-400/60 shrink-0" title="Everyday task" />
+      )}
 
       {!done && (
         <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium shrink-0", p.badgeClass)}>
@@ -586,8 +698,17 @@ function TaskRow({
       )}
 
       <button
+        onClick={() => setEditing(true)}
+        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
+        title="Edit task"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+
+      <button
         onClick={() => onDelete(task.id)}
         className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+        title="Delete task"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>

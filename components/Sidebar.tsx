@@ -109,7 +109,7 @@ export function Sidebar({ onCommandPalette }: SidebarProps) {
               <div className="text-xs font-medium text-amber-400">
                 {taskStreak.current_streak} day streak
               </div>
-              <div className="text-xs text-muted-foreground">Keep it up!</div>
+              <div className="text-xs text-muted-foreground">100% tasks done</div>
             </div>
           </div>
         )}

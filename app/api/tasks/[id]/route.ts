@@ -32,6 +32,8 @@ export async function PATCH(
   if ("scheduled_end" in body) updates.scheduled_end = body.scheduled_end;
   if ("sort_order" in body) updates.sort_order = body.sort_order;
   if ("category" in body) updates.category = body.category;
+  if ("is_habit" in body) updates.is_habit = body.is_habit;
+  if ("habit_days" in body) updates.habit_days = body.habit_days;
 
   const { data, error: dbError } = await supabase
     .from("tasks")
@@ -92,17 +94,24 @@ async function updateTaskStreak(
 ) {
   const today = new Date().toISOString().split("T")[0];
 
+  // Only award streak if ALL tasks scheduled for today are completed
+  const { data: todayTasks } = await supabase
+    .from("tasks")
+    .select("status")
+    .eq("user_id", userId)
+    .eq("scheduled_date", today);
+
+  if (!todayTasks || todayTasks.length === 0) return;
+  if (!todayTasks.every((t) => t.status === "completed")) return;
+
   const { data: streak } = await supabase
     .from("streaks")
     .select("*")
     .eq("user_id", userId)
     .eq("streak_type", "task_completion")
-    .single();
+    .maybeSingle();
 
-  if (!streak) return;
-
-  const lastDate = streak.last_activity_date;
-
+  const lastDate = streak?.last_activity_date;
   if (lastDate === today) return; // already counted today
 
   const yesterday = new Date();
@@ -110,14 +119,26 @@ async function updateTaskStreak(
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
   const isConsecutive = lastDate === yesterdayStr;
-  const newStreak = isConsecutive ? streak.current_streak + 1 : 1;
+  const newStreak = isConsecutive ? (streak?.current_streak ?? 0) + 1 : 1;
 
-  await supabase
-    .from("streaks")
-    .update({
-      current_streak: newStreak,
-      longest_streak: Math.max(newStreak, streak.longest_streak),
-      last_activity_date: today,
-    })
-    .eq("id", streak.id);
+  if (streak) {
+    await supabase
+      .from("streaks")
+      .update({
+        current_streak: newStreak,
+        longest_streak: Math.max(newStreak, streak.longest_streak),
+        last_activity_date: today,
+      })
+      .eq("id", streak.id);
+  } else {
+    await supabase
+      .from("streaks")
+      .insert({
+        user_id: userId,
+        streak_type: "task_completion",
+        current_streak: 1,
+        longest_streak: 1,
+        last_activity_date: today,
+      });
+  }
 }
