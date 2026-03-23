@@ -70,11 +70,13 @@ export async function GET(request: NextRequest) {
 
   const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
 
-  // Apply the current user's adjustment for this period
-  const myAdjustments = (profileMap[user.id]?.leaderboard_adjustments as Record<string, number>) ?? {};
-  const myAdjustmentMinutes = myAdjustments[period] ?? 0;
-  if (myAdjustmentMinutes !== 0) {
-    minutesByUser.set(user.id, Math.max(0, (minutesByUser.get(user.id) ?? 0) + myAdjustmentMinutes));
+  // Apply each user's adjustment for this period
+  for (const id of allIds) {
+    const adjustments = (profileMap[id]?.leaderboard_adjustments as Record<string, number>) ?? {};
+    const adj = adjustments[period] ?? 0;
+    if (adj !== 0) {
+      minutesByUser.set(id, Math.max(0, (minutesByUser.get(id) ?? 0) + adj));
+    }
   }
 
   // Build ranked list
