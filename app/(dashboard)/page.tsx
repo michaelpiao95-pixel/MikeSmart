@@ -52,12 +52,12 @@ export default function TodayPage() {
     monday.setDate(now.getDate() - dowOffset);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    const weekStart = monday.toISOString().split("T")[0];
-    const weekEnd = sunday.toISOString().split("T")[0];
+    const weekStart = format(monday, "yyyy-MM-dd");
+    const weekEnd = format(sunday, "yyyy-MM-dd");
 
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = format(yesterday, "yyyy-MM-dd");
 
     const [tasksRes, assignmentsRes, profileRes, pomodoroRes, weekTasksRes, reflRes, coursesRes] =
       await Promise.all([
@@ -68,7 +68,7 @@ export default function TodayPage() {
           .from("pomodoro_sessions")
           .select("duration_minutes")
           .eq("user_id", user.id)
-          .gte("started_at", new Date().toISOString().split("T")[0]),
+          .gte("started_at", (() => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString(); })()),
         supabase
           .from("tasks")
           .select("status")
@@ -146,7 +146,7 @@ export default function TodayPage() {
       .from("pomodoro_sessions")
       .select("duration_minutes")
       .eq("user_id", user.id)
-      .gte("started_at", new Date().toISOString().split("T")[0]);
+      .gte("started_at", (() => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString(); })());
     const minutes = (data ?? []).reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     setStudyMinutes(minutes);
   }, [supabase]);

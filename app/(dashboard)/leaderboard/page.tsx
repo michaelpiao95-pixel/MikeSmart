@@ -84,7 +84,7 @@ export default function LeaderboardPage() {
 
   const load = useCallback(async (p: Period) => {
     setLoading(true);
-    const res = await fetch(`/api/friends/leaderboard?period=${p}`);
+    const res = await fetch(`/api/friends/leaderboard?period=${p}&tzOffset=${new Date().getTimezoneOffset()}`);
     const json = await res.json();
     setEntries(json.data ?? []);
     setLoading(false);

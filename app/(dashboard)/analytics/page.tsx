@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     setLoading(true);
     setError(false);
-    fetch(`/api/analytics?days=${period}`)
+    fetch(`/api/analytics?days=${period}&tzOffset=${new Date().getTimezoneOffset()}`)
       .then((r) => r.json())
       .then((json) => {
         setDaily(json.data?.daily ?? []);

@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+// Returns the UTC timestamp of local-midnight `daysAgo` days back.
+// tzOffset = new Date().getTimezoneOffset() from client (positive = behind UTC, e.g. EDT = 240)
+function localDayStart(tzOffset: number, daysAgo = 0): Date {
+  const now = new Date();
+  const localNow = new Date(now.getTime() - tzOffset * 60000);
+  localNow.setUTCHours(0, 0, 0, 0);
+  if (daysAgo > 0) localNow.setUTCDate(localNow.getUTCDate() - daysAgo);
+  return new Date(localNow.getTime() + tzOffset * 60000);
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const days = parseInt(searchParams.get("days") ?? "7", 10);
+  const tzOffset = parseInt(searchParams.get("tzOffset") ?? "0", 10);
 
-  const since = new Date();
-  since.setDate(since.getDate() - days + 1);
-  since.setHours(0, 0, 0, 0);
+  const since = localDayStart(tzOffset, days - 1);
   const sinceISO = since.toISOString();
-  const sinceDate = sinceISO.split("T")[0];
+  // Local date string for tasks (scheduled_date is a local date)
+  const sinceDate = new Date(since.getTime() - tzOffset * 60000).toISOString().split("T")[0];
 
   const [pomodoroResult, tasksResult] = await Promise.all([
     supabase
@@ -36,14 +40,15 @@ export async function GET(request: NextRequest) {
       .not("scheduled_date", "is", null),
   ]);
 
-  // Study minutes per day
+  // Bucket sessions by local date
   const studyByDay = new Map<string, number>();
   for (const s of pomodoroResult.data ?? []) {
-    const date = s.started_at.split("T")[0];
-    studyByDay.set(date, (studyByDay.get(date) ?? 0) + s.duration_minutes);
+    const localDate = new Date(new Date(s.started_at).getTime() - tzOffset * 60000)
+      .toISOString().split("T")[0];
+    studyByDay.set(localDate, (studyByDay.get(localDate) ?? 0) + s.duration_minutes);
   }
 
-  // Tasks total + completed per day (by scheduled_date)
+  // Tasks per day (scheduled_date is already local)
   const tasksByDay = new Map<string, { total: number; completed: number }>();
   for (const t of tasksResult.data ?? []) {
     const date = t.scheduled_date as string;
@@ -53,11 +58,10 @@ export async function GET(request: NextRequest) {
     if (t.status === "completed") entry.completed++;
   }
 
-  // Build full date range with 0-fill for missing days
+  // Build date range using local dates
   const daily = Array.from({ length: days }, (_, i) => {
-    const d = new Date(since);
-    d.setDate(since.getDate() + i);
-    const date = d.toISOString().split("T")[0];
+    const dayUTC = new Date(since.getTime() + i * 86400000);
+    const date = new Date(dayUTC.getTime() - tzOffset * 60000).toISOString().split("T")[0];
     const minutes = studyByDay.get(date) ?? 0;
     const tasks = tasksByDay.get(date);
     return {
@@ -74,9 +78,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     data: {
       daily,
-      summary: {
-        totalStudyHours: +(totalMinutes / 60).toFixed(1),
-      },
+      summary: { totalStudyHours: +(totalMinutes / 60).toFixed(1) },
     },
   });
 }

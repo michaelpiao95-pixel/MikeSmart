@@ -15,6 +15,16 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const period = searchParams.get("period") ?? "weekly"; // daily | weekly | alltime
+  const tzOffset = parseInt(searchParams.get("tzOffset") ?? "0", 10);
+
+  // Returns UTC timestamp of local midnight, daysAgo days back
+  const localDayStart = (daysAgo = 0): string => {
+    const now = new Date();
+    const localNow = new Date(now.getTime() - tzOffset * 60000);
+    localNow.setUTCHours(0, 0, 0, 0);
+    if (daysAgo > 0) localNow.setUTCDate(localNow.getUTCDate() - daysAgo);
+    return new Date(localNow.getTime() + tzOffset * 60000).toISOString();
+  };
 
   // Get friend IDs
   const { data: friendships } = await admin
@@ -28,19 +38,12 @@ export async function GET(request: NextRequest) {
 
   const allIds = [user.id, ...friendIds];
 
-  // Build time filter
-  const now = new Date();
-
+  // Build time filter using user's local midnight
   let since: string | null = null;
   if (period === "daily") {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    since = d.toISOString();
+    since = localDayStart(0);
   } else if (period === "weekly") {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 6);
-    d.setHours(0, 0, 0, 0);
-    since = d.toISOString();
+    since = localDayStart(6);
   }
 
   // Query pomodoro sessions for the period
