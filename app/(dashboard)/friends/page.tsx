@@ -198,9 +198,9 @@ export default function FriendsPage() {
                   <Avatar name={f.full_name} email={f.email} avatarUrl={f.avatar_url} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {f.full_name ?? f.email}
+                      {f.full_name ?? f.email ?? "Unknown User"}
                     </p>
-                    {f.full_name && (
+                    {f.full_name && f.email && (
                       <p className="text-xs text-muted-foreground truncate">{f.email}</p>
                     )}
                   </div>

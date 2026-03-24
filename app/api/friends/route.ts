@@ -29,5 +29,22 @@ export async function GET() {
     .select("id, email, full_name, avatar_url")
     .in("id", friendIds);
 
-  return NextResponse.json({ data: profiles ?? [] });
+  // For any profile missing an email, fall back to the auth user's email
+  const missingEmailIds = (profiles ?? []).filter((p) => !p.email).map((p) => p.id);
+  const authEmailMap: Record<string, string> = {};
+  if (missingEmailIds.length > 0) {
+    await Promise.all(
+      missingEmailIds.map(async (id) => {
+        const { data: { user: authUser } } = await admin.auth.admin.getUserById(id);
+        if (authUser?.email) authEmailMap[id] = authUser.email;
+      })
+    );
+  }
+
+  const data = (profiles ?? []).map((p) => ({
+    ...p,
+    email: p.email ?? authEmailMap[p.id] ?? null,
+  }));
+
+  return NextResponse.json({ data });
 }
