@@ -192,7 +192,7 @@ export default function FriendsPage() {
               </button>
             </div>
           ) : (
-            <div className="bg-surface-2 border border-border rounded-xl divide-y divide-border">
+            <div className="bg-surface-2 border border-border rounded-xl divide-y divide-border stagger-children">
               {friends.map((f) => (
                 <div key={f.id} className="flex items-center gap-3 p-4">
                   <Avatar name={f.full_name} email={f.email} avatarUrl={f.avatar_url} />
@@ -265,7 +265,7 @@ export default function FriendsPage() {
             ) : discover.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No one else to add right now.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 stagger-children">
                 {discover.map((profile) => {
                   const sent = sentIds.has(profile.id);
                   return (

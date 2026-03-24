@@ -41,23 +41,31 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* ── Global button micro-interactions ─────────────────────────── */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    transition-property: background-color, border-color, color, opacity, box-shadow, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: scale(0.97);
+    transition-duration: 80ms;
+  }
+
+  /* ── Input / textarea focus transitions ───────────────────────── */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+
   /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-surface-4 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted;
-  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-surface-4 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
 
   /* Focus ring */
   :focus-visible {
@@ -86,23 +94,71 @@
     background-clip: text;
   }
 
+  /* ── Page / section entrance ──────────────────────────────────── */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
   .animate-fade-in {
-    animation: fade-in 0.35s ease-out both;
+    animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  @keyframes fade-in {
+  /* ── Card entrance ────────────────────────────────────────────── */
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-card-in {
+    animation: card-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ── Modal / sheet entrance ───────────────────────────────────── */
+  @keyframes backdrop-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .animate-backdrop-in {
+    animation: backdrop-in 0.18s ease-out both;
+  }
+
+  @keyframes modal-in {
+    from { opacity: 0; transform: scale(0.95) translateY(6px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0); }
+  }
+  .animate-modal-in {
+    animation: modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ── Staggered list children ──────────────────────────────────── */
+  /* Add class="stagger-children" to any container — children cascade in */
+  @keyframes stagger-item {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+  .stagger-children > * {
+    animation: stagger-item 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger-children > *:nth-child(1)  { animation-delay:   0ms; }
+  .stagger-children > *:nth-child(2)  { animation-delay:  40ms; }
+  .stagger-children > *:nth-child(3)  { animation-delay:  80ms; }
+  .stagger-children > *:nth-child(4)  { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(5)  { animation-delay: 160ms; }
+  .stagger-children > *:nth-child(6)  { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(7)  { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(8)  { animation-delay: 280ms; }
+  .stagger-children > *:nth-child(9)  { animation-delay: 320ms; }
+  .stagger-children > *:nth-child(10) { animation-delay: 350ms; }
+  /* cap delay for longer lists */
+  .stagger-children > *:nth-child(n+11) { animation-delay: 350ms; }
 
-  /* Stagger helpers */
-  .stagger-1  { animation: fade-in 0.35s ease-out 0.05s both; }
-  .stagger-2  { animation: fade-in 0.35s ease-out 0.10s both; }
-  .stagger-3  { animation: fade-in 0.35s ease-out 0.15s both; }
-  .stagger-4  { animation: fade-in 0.35s ease-out 0.20s both; }
-  .stagger-5  { animation: fade-in 0.35s ease-out 0.25s both; }
+  /* Legacy explicit stagger helpers */
+  .stagger-1  { animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.05s  both; }
+  .stagger-2  { animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.10s  both; }
+  .stagger-3  { animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.15s  both; }
+  .stagger-4  { animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.20s  both; }
+  .stagger-5  { animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.25s  both; }
 
-  /* Checkbox pop */
+  /* ── Checkbox / toggle spring pop ────────────────────────────── */
   @keyframes pop {
     0%   { transform: scale(1); }
     40%  { transform: scale(1.35); }
@@ -113,7 +169,7 @@
     animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  /* Logo shimmer */
+  /* ── Logo shimmer ─────────────────────────────────────────────── */
   @keyframes shimmer {
     0%   { background-position: -200% center; }
     100% { background-position:  200% center; }
@@ -127,16 +183,25 @@
     animation: shimmer 4s linear infinite;
   }
 
-  /* Slide up from bottom */
+  /* ── Slide up ─────────────────────────────────────────────────── */
   @keyframes slide-up {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-slide-up {
-    animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  /* Pulse glow on logo icon */
+  /* ── Slide in from left ───────────────────────────────────────── */
+  @keyframes slide-in {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(0); }
+  }
+  .animate-slide-in {
+    animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ── Logo pulse glow ──────────────────────────────────────────── */
   @keyframes pulse-glow {
     0%, 100% { box-shadow: 0 0 8px 2px rgba(99,102,241,0.25); }
     50%       { box-shadow: 0 0 20px 6px rgba(99,102,241,0.5); }
@@ -145,7 +210,11 @@
     animation: pulse-glow 3s ease-in-out infinite;
   }
 
-  /* Confetti burst (3 particles) */
+  /* ── Glow effects ─────────────────────────────────────────────── */
+  .glow-brand { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+  .glow-red   { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+
+  /* ── Confetti burst ───────────────────────────────────────────── */
   @keyframes confetti-1 {
     0%   { opacity:1; transform: translate(0,0) scale(1) rotate(0deg); }
     100% { opacity:0; transform: translate(-18px,-28px) scale(0) rotate(-60deg); }
@@ -157,14 +226,5 @@
   @keyframes confetti-3 {
     0%   { opacity:1; transform: translate(0,0) scale(1) rotate(0deg); }
     100% { opacity:0; transform: translate(0,-32px) scale(0) rotate(20deg); }
-  }
-
-  /* Glow effects */
-  .glow-brand {
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-  }
-
-  .glow-red {
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
   }
 }

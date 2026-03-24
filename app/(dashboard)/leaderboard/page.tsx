@@ -200,7 +200,7 @@ export default function LeaderboardPage() {
           )}
 
           {/* Full ranked list */}
-          <div className="bg-surface-2 border border-border rounded-xl divide-y divide-border">
+          <div className="bg-surface-2 border border-border rounded-xl divide-y divide-border stagger-children">
             {entries.map((entry) => (
               <div
                 key={entry.userId}
@@ -384,8 +384,8 @@ export default function LeaderboardPage() {
 
       {/* Ban modal */}
       {banTarget && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-1 border border-border rounded-xl p-6 w-full max-w-sm space-y-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-backdrop-in">
+          <div className="bg-surface-1 border border-border rounded-xl p-6 w-full max-w-sm space-y-4 animate-modal-in">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Ban className="w-4 h-4 text-red-400" />

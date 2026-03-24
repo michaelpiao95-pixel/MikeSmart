@@ -161,7 +161,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] px-4 animate-backdrop-in"
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -169,7 +169,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
       {/* Panel */}
       <div
-        className="relative w-full max-w-lg bg-surface-2 border border-border rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+        className="relative w-full max-w-lg bg-surface-2 border border-border rounded-xl shadow-2xl overflow-hidden animate-modal-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}

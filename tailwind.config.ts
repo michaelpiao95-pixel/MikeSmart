@@ -86,8 +86,20 @@ const config: Config = {
           to: { height: "0" },
         },
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(4px)" },
+          from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "card-in": {
+          from: { opacity: "0", transform: "translateY(6px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "modal-in": {
+          from: { opacity: "0", transform: "scale(0.95) translateY(6px)" },
+          to: { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+        "backdrop-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
         },
         "slide-in": {
           from: { transform: "translateX(-100%)" },
@@ -101,8 +113,11 @@ const config: Config = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.3s ease-out",
-        "slide-in": "slide-in 0.3s ease-out",
+        "fade-in": "fade-in 0.28s cubic-bezier(0.16,1,0.3,1) both",
+        "card-in": "card-in 0.25s cubic-bezier(0.16,1,0.3,1) both",
+        "modal-in": "modal-in 0.22s cubic-bezier(0.16,1,0.3,1) both",
+        "backdrop-in": "backdrop-in 0.18s ease-out both",
+        "slide-in": "slide-in 0.3s cubic-bezier(0.16,1,0.3,1)",
         "pulse-slow": "pulse 3s ease-in-out infinite",
       },
     },

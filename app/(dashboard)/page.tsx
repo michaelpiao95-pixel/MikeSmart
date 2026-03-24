@@ -343,7 +343,7 @@ export default function TodayPage() {
               {todayAssignments.filter((a) => !a.is_completed).length} remaining
             </span>
           </h2>
-          <div className="space-y-2">
+          <div className="space-y-2 stagger-children">
             {todayAssignments.map((a) => {
               const overdue = isOverdue(a.due_at) && !a.is_completed;
               const urgent = isDueWithin24Hours(a.due_at) && !a.is_completed;
@@ -460,7 +460,7 @@ export default function TodayPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
               Academic
             </p>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 stagger-children">
               {academicTasks.map((t) => (
                 <TaskRow
                   key={t.id}
@@ -481,7 +481,7 @@ export default function TodayPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
               Personal
             </p>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 stagger-children">
               {personalTasks.map((t) => (
                 <TaskRow
                   key={t.id}

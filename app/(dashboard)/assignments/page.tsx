@@ -243,8 +243,8 @@ export default function AssignmentsPage() {
 
       {/* Add Assignment Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-2 border border-border rounded-xl w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-backdrop-in">
+          <div className="bg-surface-2 border border-border rounded-xl w-full max-w-md shadow-xl animate-modal-in">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <h2 className="text-sm font-semibold text-foreground">Add Assignment</h2>
               <button
