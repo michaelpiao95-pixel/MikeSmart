@@ -98,12 +98,12 @@ export default function LeaderboardPage() {
 
   const handleAdjust = async (userId: string) => {
     const h = parseFloat(adjustHours);
-    if (isNaN(h) || h < 0) return;
+    if (isNaN(h) || h === 0) return;
     setSaving(true);
     await fetch("/api/leaderboard/adjust", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ period, totalHours: h, userId }),
+      body: JSON.stringify({ period, deltaHours: h, userId }),
     });
     setSaving(false);
     setAdjustingId(null);
@@ -257,15 +257,13 @@ export default function LeaderboardPage() {
                       <input
                         autoFocus
                         type="number"
-                        min="0"
                         step="0.1"
                         value={adjustHours}
                         onChange={(e) => setAdjustHours(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") handleAdjust(entry.userId); if (e.key === "Escape") setAdjustingId(null); }}
-                        placeholder={String(entry.hours)}
+                        placeholder="+/- h"
                         className="w-16 bg-surface-3 border border-brand-600/40 rounded px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
                       />
-                      <span className="text-xs text-muted-foreground">h</span>
                       <button onClick={() => handleAdjust(entry.userId)} disabled={saving} className="text-emerald-400 hover:text-emerald-300 transition-colors">
                         <Check className="w-4 h-4" />
                       </button>
@@ -289,7 +287,7 @@ export default function LeaderboardPage() {
                       </div>
                       {isAdmin && !entry.isBanned && (
                         <button
-                          onClick={() => { setAdjustHours(String(entry.hours)); setAdjustingId(entry.userId); }}
+                          onClick={() => { setAdjustHours(""); setAdjustingId(entry.userId); }}
                           className="text-muted-foreground hover:text-foreground transition-colors"
                           title="Adjust hours"
                         >

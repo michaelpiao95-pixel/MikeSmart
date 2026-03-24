@@ -29,8 +29,9 @@ export async function GET(request: NextRequest) {
   const allIds = [user.id, ...friendIds];
 
   // Build time filter
-  let since: string | null = null;
   const now = new Date();
+
+  let since: string | null = null;
   if (period === "daily") {
     const d = new Date(now);
     d.setHours(0, 0, 0, 0);
@@ -42,22 +43,19 @@ export async function GET(request: NextRequest) {
     since = d.toISOString();
   }
 
-  // Query pomodoro sessions for all users
+  // Query pomodoro sessions for the period
   let query = admin
     .from("pomodoro_sessions")
     .select("user_id, duration_minutes")
     .in("user_id", allIds);
-
   if (since) query = query.gte("started_at", since);
-
   const { data: sessions } = await query;
 
-  // Sum minutes per user
+  // Sum minutes per user for the period
   const minutesByUser = new Map<string, number>();
   for (const s of sessions ?? []) {
     minutesByUser.set(s.user_id, (minutesByUser.get(s.user_id) ?? 0) + s.duration_minutes);
   }
-  // Ensure all users appear even with 0
   for (const id of allIds) {
     if (!minutesByUser.has(id)) minutesByUser.set(id, 0);
   }
