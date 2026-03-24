@@ -584,7 +584,9 @@ export default function FocusPage() {
               })}
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              {config.sessionsBeforeLongBreak - (sessionsCompleted % config.sessionsBeforeLongBreak)} sessions until long break
+              {sessionsCompleted > 0 && sessionsCompleted % config.sessionsBeforeLongBreak === 0
+                ? "Long break time!"
+                : `${config.sessionsBeforeLongBreak - (sessionsCompleted % config.sessionsBeforeLongBreak)} sessions until long break`}
             </p>
           </div>
         </div>

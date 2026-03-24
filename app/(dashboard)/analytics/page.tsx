@@ -174,16 +174,18 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<7 | 14 | 30>(7);
   const [daily, setDaily] = useState<DayData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     fetch(`/api/analytics?days=${period}`)
       .then((r) => r.json())
       .then((json) => {
         setDaily(json.data?.daily ?? []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setLoading(false); setError(true); });
   }, [period]);
 
   const studyChartData = useMemo(
@@ -224,11 +226,19 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="text-center py-10 bg-surface-2 border border-border rounded-xl">
+          <p className="text-sm text-muted-foreground">Failed to load analytics. Check your connection and refresh.</p>
+        </div>
+      )}
+
       {/* Charts */}
-      <div className="grid grid-cols-1 gap-4">
-        <StudyHoursChart data={studyChartData} loading={loading} />
-        <TaskCompletionChart data={taskChartData} loading={loading} />
-      </div>
+      {!error && (
+        <div className="grid grid-cols-1 gap-4">
+          <StudyHoursChart data={studyChartData} loading={loading} />
+          <TaskCompletionChart data={taskChartData} loading={loading} />
+        </div>
+      )}
     </div>
   );
 }

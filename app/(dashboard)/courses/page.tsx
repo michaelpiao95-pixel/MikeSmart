@@ -64,7 +64,8 @@ export default function CoursesPage() {
 
     // Load saved order from localStorage
     const savedRaw = localStorage.getItem(`course_order_${user.id}`);
-    const savedOrder: string[] = savedRaw ? JSON.parse(savedRaw) : [];
+    let savedOrder: string[] = [];
+    try { savedOrder = savedRaw ? JSON.parse(savedRaw) : []; } catch { savedOrder = []; }
     // Merge: saved order first, then any new courses not yet ranked
     const savedIds = savedOrder.filter((id) => loaded.some((c) => c.id === id));
     const newIds = loaded.filter((c) => !savedIds.includes(c.id)).map((c) => c.id);

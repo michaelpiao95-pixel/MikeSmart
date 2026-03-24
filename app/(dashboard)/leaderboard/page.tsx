@@ -279,7 +279,9 @@ export default function LeaderboardPage() {
                         </p>
                         {entry.isBanned ? (
                           <p className="text-xs text-red-400">
-                            {entry.isPermanentBan ? "Perm banned" : `Banned`}
+                            {entry.isPermanentBan
+                              ? "Perm banned"
+                              : `Until ${new Date(entry.bannedUntil!).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
                           </p>
                         ) : (
                           <p className="text-xs text-muted-foreground">studied</p>

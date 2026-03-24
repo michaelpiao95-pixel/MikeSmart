@@ -112,17 +112,21 @@ export default function AssignmentsPage() {
   }, []);
 
   const handleToggle = async (id: string, completed: boolean) => {
+    // Optimistic update
+    setAssignments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, is_completed: completed } : a))
+    );
     const res = await fetch(`/api/assignments/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_completed: completed }),
     });
-
-    if (!res.ok) throw new Error("Failed to update");
-
-    setAssignments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, is_completed: completed } : a))
-    );
+    if (!res.ok) {
+      // Revert on failure
+      setAssignments((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, is_completed: !completed } : a))
+      );
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
