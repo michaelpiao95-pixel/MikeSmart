@@ -92,6 +92,12 @@ export default function LeaderboardPage() {
 
   useEffect(() => { load(period); }, [period, load]);
 
+  // Auto-refresh every 60 seconds so study time stays current
+  useEffect(() => {
+    const id = setInterval(() => load(period), 60_000);
+    return () => clearInterval(id);
+  }, [period, load]);
+
   const myEntry = entries.find((e) => e.isMe);
 
   const isAdmin = entries.some((e) => e.isMe && e.isAdmin);

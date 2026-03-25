@@ -159,7 +159,9 @@ export function usePomodoro(
         }
       } catch {}
 
-      // 2. Always get session count from DB — this is the ground truth for today
+      // 2. Always get session count from DB — this is the ground truth for today.
+      // Count distinct started_at values so old duplicate incremental-save records
+      // (which share the same started_at) each count as one session.
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -167,11 +169,11 @@ export function usePomodoro(
           midnight.setHours(0, 0, 0, 0);
           const { data } = await supabase
             .from("pomodoro_sessions")
-            .select("id")
+            .select("started_at")
             .eq("user_id", user.id)
-            .eq("completed", true)
             .gte("started_at", midnight.toISOString());
-          setSessions((data ?? []).length);
+          const unique = new Set((data ?? []).map((s) => s.started_at));
+          setSessions(unique.size);
         }
       } catch {}
     };
@@ -192,12 +194,12 @@ export function usePomodoro(
           lastMidnightRef.current = midnight.getTime();
           const { data } = await supabase
             .from("pomodoro_sessions")
-            .select("id")
+            .select("started_at")
             .eq("user_id", user.id)
-            .eq("completed", true)
             .gte("started_at", midnight.toISOString());
-          setSessions((data ?? []).length);
-          writeLS({ sessionsCompleted: (data ?? []).length });
+          const unique = new Set((data ?? []).map((s) => s.started_at));
+          setSessions(unique.size);
+          writeLS({ sessionsCompleted: unique.size });
         }
       } catch {}
     };
@@ -258,7 +260,7 @@ export function usePomodoro(
     const fromPhase = phaseRef.current;
 
     if (fromPhase === "focus") {
-      await saveIncremental(true, cfg.focusMinutes);
+      await saveIncremental(true);
 
       const newSessions = sessionsRef.current + 1;
       const nextPhase: PomodoroPhase =
