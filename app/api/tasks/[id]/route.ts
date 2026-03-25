@@ -53,7 +53,8 @@ export async function PATCH(
 
   // Update streak if completing a task
   if (body.status === "completed") {
-    await updateTaskStreak(supabase, user.id);
+    const tzOffset = typeof body.tzOffset === "number" ? body.tzOffset : 0;
+    await updateTaskStreak(supabase, user.id, tzOffset);
   }
 
   return NextResponse.json({ data });
@@ -90,9 +91,15 @@ export async function DELETE(
 
 async function updateTaskStreak(
   supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>,
-  userId: string
+  userId: string,
+  tzOffset: number
 ) {
-  const today = new Date().toISOString().split("T")[0];
+  // Compute local "today" and "yesterday" using the user's timezone offset
+  const nowLocal = new Date(Date.now() - tzOffset * 60000);
+  const today = nowLocal.toISOString().split("T")[0];
+  const prevLocal = new Date(nowLocal.getTime());
+  prevLocal.setUTCDate(prevLocal.getUTCDate() - 1);
+  const yesterdayStr = prevLocal.toISOString().split("T")[0];
 
   // Only award streak if ALL tasks scheduled for today are completed
   const { data: todayTasks } = await supabase
@@ -113,10 +120,6 @@ async function updateTaskStreak(
 
   const lastDate = streak?.last_activity_date;
   if (lastDate === today) return; // already counted today
-
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
 
   const isConsecutive = lastDate === yesterdayStr;
   const newStreak = isConsecutive ? (streak?.current_streak ?? 0) + 1 : 1;

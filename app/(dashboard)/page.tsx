@@ -61,7 +61,7 @@ export default function TodayPage() {
 
     const [tasksRes, assignmentsRes, profileRes, pomodoroRes, weekTasksRes, reflRes, coursesRes] =
       await Promise.all([
-        fetch(`/api/tasks?date=${today}`),
+        fetch(`/api/tasks?date=${today}&tzOffset=${new Date().getTimezoneOffset()}`),
         fetch("/api/assignments"),
         supabase.from("profiles").select("canvas_last_synced_at").eq("id", user.id).single(),
         supabase
@@ -181,7 +181,7 @@ export default function TodayPage() {
     await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ status: newStatus, tzOffset: new Date().getTimezoneOffset() }),
     });
   };
 

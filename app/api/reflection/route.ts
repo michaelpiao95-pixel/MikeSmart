@@ -55,10 +55,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  // Update reflection streak
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  // Update reflection streak — compute yesterday from the local date string to avoid UTC shift
+  const [ry, rm, rd] = date.split("-").map(Number);
+  const prevDay = new Date(Date.UTC(ry, rm - 1, rd - 1));
+  const yesterdayStr = prevDay.toISOString().split("T")[0];
 
   const { data: streak } = await supabase
     .from("streaks")

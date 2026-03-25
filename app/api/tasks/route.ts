@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") ?? todayISO();
   const includeHabits = searchParams.get("include_habits") !== "false";
+  const tzOffset = parseInt(searchParams.get("tzOffset") ?? "0", 10);
 
   // Get tasks for a specific date + habits for any day
   let query = supabase
@@ -41,7 +42,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Filter habits by day of week, and reset their status if completed on a different day
-  const dayOfWeek = new Date(date).getDay();
+  // Parse date as local (not UTC) to get the correct day of week
+  const [dy, dm, dd] = date.split("-").map(Number);
+  const dayOfWeek = new Date(dy, dm - 1, dd).getDay();
   const filtered = (data ?? [])
     .filter((task) => {
       if (!task.is_habit) return true;
@@ -50,7 +53,12 @@ export async function GET(request: NextRequest) {
     })
     .map((task) => {
       if (!task.is_habit) return task;
-      const completedDate = task.completed_at?.split("T")[0];
+      // Convert completed_at UTC timestamp to the user's local date before comparing
+      const completedDate = task.completed_at
+        ? new Date(new Date(task.completed_at).getTime() - tzOffset * 60000)
+            .toISOString()
+            .split("T")[0]
+        : undefined;
       if (task.status === "completed" && completedDate !== date) {
         return { ...task, status: "pending", completed_at: null };
       }
