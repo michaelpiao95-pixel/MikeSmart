@@ -28,12 +28,14 @@ interface StoredState {
   secondsLeft: number;
   isRunning: boolean;
   sessionsCompleted: number;
-  date?: string; // YYYY-MM-DD — used to reset count daily
+  dayTimestamp?: number; // ms timestamp of local midnight — resets sessions when day changes
+  date?: string; // legacy, ignored
 }
 
-function todayDate() {
+function localMidnightMs(): number {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
 export function usePomodoro(
@@ -102,7 +104,7 @@ export function usePomodoro(
           secondsLeft: secondsLeftRef.current,
           isRunning: isRunningRef.current,
           sessionsCompleted: sessionsRef.current,
-          date: todayDate(),
+          dayTimestamp: localMidnightMs(),
           ...overrides,
         };
         localStorage.setItem(LS_KEY, JSON.stringify(state));
@@ -119,9 +121,10 @@ export function usePomodoro(
       const stored: StoredState = JSON.parse(raw);
 
       // Always restore today's session count; reset to 0 if it's a new day
-      const storedSessions = stored.date === todayDate() ? stored.sessionsCompleted : 0;
+      const isNewDay = (stored.dayTimestamp ?? 0) < localMidnightMs();
+      const storedSessions = isNewDay ? 0 : stored.sessionsCompleted;
 
-      if (stored.phase === "idle" || stored.date !== todayDate()) {
+      if (stored.phase === "idle" || isNewDay) {
         // Just restore the session count for today, leave timer idle
         setSessions(storedSessions);
         return;
@@ -174,7 +177,7 @@ export function usePomodoro(
       if (!raw) return;
       try {
         const stored = JSON.parse(raw);
-        if (stored.date !== todayDate()) {
+        if ((stored.dayTimestamp ?? 0) < localMidnightMs()) {
           setSessions(0);
           writeLS({ sessionsCompleted: 0 });
         }
