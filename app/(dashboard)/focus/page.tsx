@@ -281,6 +281,7 @@ export default function FocusPage() {
       supabase.from("pomodoro_sessions")
         .select("duration_minutes")
         .eq("user_id", user.id)
+        .eq("completed", true)
         .gte("started_at", (() => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString(); })()),
     ]);
 

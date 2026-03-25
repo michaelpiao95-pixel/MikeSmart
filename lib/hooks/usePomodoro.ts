@@ -88,6 +88,7 @@ export function usePomodoro(
   const lastMidnightRef = useRef<number>(localMidnightMs());
   const savedMinutesRef = useRef(0);
   const lastIncrementalSaveRef = useRef(0);
+  const currentSessionIdRef = useRef<string | null>(null);
   const onMinutesSavedRef = useRef(onMinutesSaved);
   onMinutesSavedRef.current = onMinutesSaved;
   const onTransitionRef = useRef(onTransition);
@@ -168,6 +169,7 @@ export function usePomodoro(
             .from("pomodoro_sessions")
             .select("id")
             .eq("user_id", user.id)
+            .eq("completed", true)
             .gte("started_at", midnight.toISOString());
           setSessions((data ?? []).length);
         }
@@ -192,6 +194,7 @@ export function usePomodoro(
             .from("pomodoro_sessions")
             .select("id")
             .eq("user_id", user.id)
+            .eq("completed", true)
             .gte("started_at", midnight.toISOString());
           setSessions((data ?? []).length);
           writeLS({ sessionsCompleted: (data ?? []).length });
@@ -208,25 +211,43 @@ export function usePomodoro(
       const totalElapsed =
         overrideElapsed ??
         Math.floor((Date.now() - sessionStartedAtRef.current.getTime()) / 60000);
-      const toSave = totalElapsed - savedMinutesRef.current;
-      if (toSave < 1) return 0;
+      if (totalElapsed < 1) return 0;
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return 0;
 
-      await supabase.from("pomodoro_sessions").insert({
-        user_id: user.id,
-        duration_minutes: toSave,
-        completed,
-        started_at: sessionStartedAtRef.current.toISOString(),
-        ended_at: new Date().toISOString(),
-      });
+      if (currentSessionIdRef.current) {
+        // Update the existing record with cumulative elapsed time
+        await supabase
+          .from("pomodoro_sessions")
+          .update({
+            duration_minutes: totalElapsed,
+            completed,
+            ended_at: new Date().toISOString(),
+          })
+          .eq("id", currentSessionIdRef.current);
+      } else {
+        // First save — insert a new record
+        const { data } = await supabase
+          .from("pomodoro_sessions")
+          .insert({
+            user_id: user.id,
+            duration_minutes: totalElapsed,
+            completed,
+            started_at: sessionStartedAtRef.current.toISOString(),
+            ended_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (data) currentSessionIdRef.current = data.id;
+      }
 
-      savedMinutesRef.current += toSave;
-      onMinutesSavedRef.current?.(toSave);
-      return toSave;
+      const delta = totalElapsed - savedMinutesRef.current;
+      savedMinutesRef.current = totalElapsed;
+      if (delta > 0) onMinutesSavedRef.current?.(delta);
+      return delta > 0 ? delta : 0;
     },
     [supabase]
   );
@@ -253,6 +274,7 @@ export function usePomodoro(
       endTimeRef.current = newEndTime;
       sessionStartedAtRef.current = null;
       savedMinutesRef.current = 0;
+      currentSessionIdRef.current = null;
 
       setIsRunning(true);
       onTransitionRef.current?.(fromPhase, nextPhase);
@@ -269,6 +291,7 @@ export function usePomodoro(
       endTimeRef.current = newEndTime;
       sessionStartedAtRef.current = new Date();
       savedMinutesRef.current = 0;
+      currentSessionIdRef.current = null;
 
       setIsRunning(true);
       onTransitionRef.current?.(fromPhase, nextPhase);
@@ -288,6 +311,7 @@ export function usePomodoro(
       if (targetPhase === "focus") {
         sessionStartedAtRef.current = new Date();
         savedMinutesRef.current = 0;
+        currentSessionIdRef.current = null;
         lastIncrementalSaveRef.current = Date.now();
       }
 
@@ -319,6 +343,7 @@ export function usePomodoro(
     setSecondsLeft(configRef.current.focusMinutes * 60);
     sessionStartedAtRef.current = null;
     savedMinutesRef.current = 0;
+    currentSessionIdRef.current = null;
     // Keep sessions count in localStorage (with idle phase) so it survives restarts
     writeLS({ phase: "idle", endTime: null, isRunning: false, secondsLeft: configRef.current.focusMinutes * 60 });
   }, [saveIncremental, setPhase, setSecondsLeft, setIsRunning, writeLS]);
