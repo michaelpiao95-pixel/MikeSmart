@@ -49,55 +49,83 @@ export async function GET(request: NextRequest) {
 
   const allIds = [user.id, ...friendIds];
 
-  // Build time filter: daily = today, weekly = Mon–now, alltime = no filter
-  let since: string | null = null;
-  if (period === "daily") {
-    since = localMidnight(0);
-  } else if (period === "weekly") {
-    since = localWeekStart();
+  const dailyStartMs  = new Date(localMidnight(0)).getTime();
+  const weeklyStartMs = new Date(localWeekStart()).getTime();
+
+  const weeklyStartISO = new Date(weeklyStartMs).toISOString();
+
+  // Paginate through ALL sessions to get alltime totals (Supabase caps at 1000/page)
+  const alltimeSessions: Array<{ user_id: string; duration_minutes: number }> = [];
+  for (let page = 0; ; page++) {
+    const { data } = await admin
+      .from("pomodoro_sessions")
+      .select("user_id, duration_minutes")
+      .in("user_id", allIds)
+      .range(page * 1000, page * 1000 + 999);
+    if (!data || data.length === 0) break;
+    alltimeSessions.push(...data);
+    if (data.length < 1000) break;
   }
 
-  // Query pomodoro sessions for the period
-  let query = admin
-    .from("pomodoro_sessions")
-    .select("user_id, duration_minutes")
-    .in("user_id", allIds);
-  if (since) query = query.gte("started_at", since);
-  const { data: sessions } = await query;
-
-  // Sum minutes per user for the period
-  const minutesByUser = new Map<string, number>();
-  for (const s of sessions ?? []) {
-    minutesByUser.set(s.user_id, (minutesByUser.get(s.user_id) ?? 0) + s.duration_minutes);
-  }
-  for (const id of allIds) {
-    if (!minutesByUser.has(id)) minutesByUser.set(id, 0);
+  // Paginate through this week's sessions for daily/weekly buckets
+  const recentSessions: Array<{ user_id: string; duration_minutes: number; started_at: string }> = [];
+  for (let page = 0; ; page++) {
+    const { data } = await admin
+      .from("pomodoro_sessions")
+      .select("user_id, duration_minutes, started_at")
+      .in("user_id", allIds)
+      .gte("started_at", weeklyStartISO)
+      .range(page * 1000, page * 1000 + 999);
+    if (!data || data.length === 0) break;
+    recentSessions.push(...data);
+    if (data.length < 1000) break;
   }
 
-  // Fetch profiles
   const { data: profiles } = await admin
     .from("profiles")
     .select("id, email, full_name, avatar_url, leaderboard_adjustments, is_admin, banned_until")
     .in("id", allIds);
 
+  // Bucket sessions into periods
+  const rawMinutes = new Map<string, { daily: number; weekly: number; alltime: number }>();
+  for (const id of allIds) rawMinutes.set(id, { daily: 0, weekly: 0, alltime: 0 });
+
+  // Alltime: sum all pages of sessions
+  for (const s of alltimeSessions) {
+    const bucket = rawMinutes.get(s.user_id);
+    if (!bucket) continue;
+    bucket.alltime += s.duration_minutes;
+  }
+
+  // Daily + weekly: only sessions from this week (pre-filtered, won't hit 1000 limit)
+  for (const s of recentSessions ?? []) {
+    const bucket = rawMinutes.get(s.user_id);
+    if (!bucket) continue;
+    const t = new Date(s.started_at).getTime();
+    if (t >= weeklyStartMs) bucket.weekly += s.duration_minutes;
+    if (t >= dailyStartMs)  bucket.daily  += s.duration_minutes;
+  }
+
   const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
   const isAdmin = profileMap[user.id]?.is_admin === true;
   const nowTs = new Date();
 
-  // Apply each user's adjustment, enforcing the hierarchy:
-  // weekly adj >= daily adj, alltime adj >= weekly adj >= daily adj
-  // This ensures today's hours always count toward this week, and this week toward all-time.
+  // Apply adjustments then enforce daily ≤ weekly ≤ alltime
+  const minutesByUser = new Map<string, number>();
   for (const id of allIds) {
     const adj = (profileMap[id]?.leaderboard_adjustments as Record<string, number>) ?? {};
-    let periodAdj = adj[period] ?? 0;
-    if (period === "weekly") {
-      periodAdj = Math.max(periodAdj, adj.daily ?? 0);
-    } else if (period === "alltime") {
-      periodAdj = Math.max(periodAdj, adj.weekly ?? 0, adj.daily ?? 0);
-    }
-    if (periodAdj !== 0) {
-      minutesByUser.set(id, Math.max(0, (minutesByUser.get(id) ?? 0) + periodAdj));
-    }
+    const raw = rawMinutes.get(id)!;
+
+    const dailyFinal   = Math.max(0, raw.daily   + (adj.daily   ?? 0));
+    const weeklyRaw    = Math.max(0, raw.weekly   + (adj.weekly  ?? 0));
+    const alltimeRaw   = Math.max(0, raw.alltime  + (adj.alltime ?? 0));
+    const weeklyFinal  = Math.max(weeklyRaw,  dailyFinal);
+    const alltimeFinal = Math.max(alltimeRaw, weeklyFinal);
+
+    minutesByUser.set(
+      id,
+      period === "daily" ? dailyFinal : period === "weekly" ? weeklyFinal : alltimeFinal
+    );
   }
 
   // Build ranked list — admins see banned users with a flag; others don't see them
