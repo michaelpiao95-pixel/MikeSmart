@@ -167,6 +167,23 @@ export function usePomodoro(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-reset sessions at local midnight if app stays open
+  useEffect(() => {
+    const check = () => {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      try {
+        const stored = JSON.parse(raw);
+        if (stored.date !== todayDate()) {
+          setSessions(0);
+          writeLS({ sessionsCompleted: 0 });
+        }
+      } catch {}
+    };
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [setSessions, writeLS]);
+
   const saveIncremental = useCallback(
     async (completed: boolean, overrideElapsed?: number) => {
       if (phaseRef.current !== "focus" || !sessionStartedAtRef.current) return 0;
