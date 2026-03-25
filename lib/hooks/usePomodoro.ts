@@ -85,6 +85,7 @@ export function usePomodoro(
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number | null>(null);
   const sessionStartedAtRef = useRef<Date | null>(null);
+  const lastMidnightRef = useRef<number>(localMidnightMs());
   const savedMinutesRef = useRef(0);
   const lastIncrementalSaveRef = useRef(0);
   const onMinutesSavedRef = useRef(onMinutesSaved);
@@ -113,79 +114,93 @@ export function usePomodoro(
     []
   );
 
-  // Restore from localStorage on mount
+  // Restore from localStorage on mount, then sync session count from DB
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return;
-      const stored: StoredState = JSON.parse(raw);
+    const init = async () => {
+      // 1. Restore timer state from localStorage
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) {
+          const stored: StoredState = JSON.parse(raw);
+          const isNewDay = (stored.dayTimestamp ?? 0) < localMidnightMs();
 
-      // Always restore today's session count; reset to 0 if it's a new day
-      const isNewDay = (stored.dayTimestamp ?? 0) < localMidnightMs();
-      const storedSessions = isNewDay ? 0 : stored.sessionsCompleted;
-
-      if (stored.phase === "idle" || isNewDay) {
-        // Just restore the session count for today, leave timer idle
-        setSessions(storedSessions);
-        return;
-      }
-
-      if (stored.isRunning && stored.endTime) {
-        const remaining = Math.round((stored.endTime - Date.now()) / 1000);
-        if (remaining > 0) {
-          endTimeRef.current = stored.endTime;
-          setPhase(stored.phase);
-          setSecondsLeft(remaining);
-          setSessions(storedSessions);
-          setIsRunning(true);
-          if (stored.phase === "focus") {
-            // Approximate start time from remaining seconds
-            const cfg = configRef.current;
-            const elapsed = cfg.focusMinutes * 60 - remaining;
-            sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
+          if (!isNewDay && stored.phase !== "idle") {
+            if (stored.isRunning && stored.endTime) {
+              const remaining = Math.round((stored.endTime - Date.now()) / 1000);
+              if (remaining > 0) {
+                endTimeRef.current = stored.endTime;
+                setPhase(stored.phase);
+                setSecondsLeft(remaining);
+                setIsRunning(true);
+                if (stored.phase === "focus") {
+                  const cfg = configRef.current;
+                  const elapsed = cfg.focusMinutes * 60 - remaining;
+                  sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
+                }
+              } else {
+                // Timer expired while away
+                const cfg = configRef.current;
+                const nextPhase: PomodoroPhase =
+                  stored.phase === "focus"
+                    ? (stored.sessionsCompleted + 1) % cfg.sessionsBeforeLongBreak === 0
+                      ? "long_break"
+                      : "short_break"
+                    : "focus";
+                setPhase(nextPhase);
+                setSecondsLeft(getPhaseSeconds(nextPhase));
+              }
+            } else {
+              // Paused
+              setPhase(stored.phase);
+              setSecondsLeft(stored.secondsLeft);
+            }
           }
-          return;
         }
-        // Timer expired while away — show next phase ready but not running
-        const cfg = configRef.current;
-        const newSessions =
-          stored.phase === "focus" ? storedSessions + 1 : storedSessions;
-        const nextPhase: PomodoroPhase =
-          stored.phase === "focus"
-            ? newSessions % cfg.sessionsBeforeLongBreak === 0
-              ? "long_break"
-              : "short_break"
-            : "focus";
-        setPhase(nextPhase);
-        setSecondsLeft(getPhaseSeconds(nextPhase));
-        setSessions(newSessions);
-        return;
-      }
+      } catch {}
 
-      // Was paused — restore paused state
-      setPhase(stored.phase);
-      setSecondsLeft(stored.secondsLeft);
-      setSessions(storedSessions);
-    } catch {}
+      // 2. Always get session count from DB — this is the ground truth for today
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const midnight = new Date();
+          midnight.setHours(0, 0, 0, 0);
+          const { data } = await supabase
+            .from("pomodoro_sessions")
+            .select("id")
+            .eq("user_id", user.id)
+            .gte("started_at", midnight.toISOString());
+          setSessions((data ?? []).length);
+        }
+      } catch {}
+    };
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-reset sessions at local midnight if app stays open
   useEffect(() => {
-    const check = () => {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return;
+    const check = async () => {
+      if (localMidnightMs() <= (lastMidnightRef.current ?? 0)) return;
+      // A new day has started — re-query DB for fresh count
       try {
-        const stored = JSON.parse(raw);
-        if ((stored.dayTimestamp ?? 0) < localMidnightMs()) {
-          setSessions(0);
-          writeLS({ sessionsCompleted: 0 });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const midnight = new Date();
+          midnight.setHours(0, 0, 0, 0);
+          lastMidnightRef.current = midnight.getTime();
+          const { data } = await supabase
+            .from("pomodoro_sessions")
+            .select("id")
+            .eq("user_id", user.id)
+            .gte("started_at", midnight.toISOString());
+          setSessions((data ?? []).length);
+          writeLS({ sessionsCompleted: (data ?? []).length });
         }
       } catch {}
     };
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
-  }, [setSessions, writeLS]);
+  }, [setSessions, writeLS, supabase]);
 
   const saveIncremental = useCallback(
     async (completed: boolean, overrideElapsed?: number) => {
