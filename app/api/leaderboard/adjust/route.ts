@@ -39,7 +39,22 @@ export async function POST(request: NextRequest) {
     .single();
 
   const existing = (profile?.leaderboard_adjustments as Record<string, number>) ?? {};
-  const updated = { ...existing, [period]: (existing[period] ?? 0) + deltaMinutes };
+  const updated = { ...existing };
+
+  // Cascade delta up the hierarchy: daily → weekly → alltime
+  // Adjusting daily also adds to weekly and alltime (hours studied today count toward the week and all-time)
+  // Adjusting weekly also adds to alltime
+  // Adjusting alltime only affects alltime
+  if (period === "daily") {
+    updated.daily = (existing.daily ?? 0) + deltaMinutes;
+    updated.weekly = (existing.weekly ?? 0) + deltaMinutes;
+    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
+  } else if (period === "weekly") {
+    updated.weekly = (existing.weekly ?? 0) + deltaMinutes;
+    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
+  } else {
+    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
+  }
 
   await admin.from("profiles").update({ leaderboard_adjustments: updated }).eq("id", targetId);
 

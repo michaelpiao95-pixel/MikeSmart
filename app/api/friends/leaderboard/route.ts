@@ -84,12 +84,19 @@ export async function GET(request: NextRequest) {
   const isAdmin = profileMap[user.id]?.is_admin === true;
   const nowTs = new Date();
 
-  // Apply each user's adjustment for this period
+  // Apply each user's adjustment, enforcing the hierarchy:
+  // weekly adj >= daily adj, alltime adj >= weekly adj >= daily adj
+  // This ensures today's hours always count toward this week, and this week toward all-time.
   for (const id of allIds) {
-    const adjustments = (profileMap[id]?.leaderboard_adjustments as Record<string, number>) ?? {};
-    const adj = adjustments[period] ?? 0;
-    if (adj !== 0) {
-      minutesByUser.set(id, Math.max(0, (minutesByUser.get(id) ?? 0) + adj));
+    const adj = (profileMap[id]?.leaderboard_adjustments as Record<string, number>) ?? {};
+    let periodAdj = adj[period] ?? 0;
+    if (period === "weekly") {
+      periodAdj = Math.max(periodAdj, adj.daily ?? 0);
+    } else if (period === "alltime") {
+      periodAdj = Math.max(periodAdj, adj.weekly ?? 0, adj.daily ?? 0);
+    }
+    if (periodAdj !== 0) {
+      minutesByUser.set(id, Math.max(0, (minutesByUser.get(id) ?? 0) + periodAdj));
     }
   }
 
