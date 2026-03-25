@@ -17,12 +17,23 @@ export async function GET(request: NextRequest) {
   const period = searchParams.get("period") ?? "weekly"; // daily | weekly | alltime
   const tzOffset = parseInt(searchParams.get("tzOffset") ?? "0", 10);
 
-  // Returns UTC timestamp of local midnight, daysAgo days back
-  const localDayStart = (daysAgo = 0): string => {
+  // Returns UTC timestamp of local midnight in the user's timezone
+  const localMidnight = (daysAgo = 0): string => {
     const now = new Date();
     const localNow = new Date(now.getTime() - tzOffset * 60000);
     localNow.setUTCHours(0, 0, 0, 0);
     if (daysAgo > 0) localNow.setUTCDate(localNow.getUTCDate() - daysAgo);
+    return new Date(localNow.getTime() + tzOffset * 60000).toISOString();
+  };
+
+  // Returns UTC timestamp of the most recent Monday midnight in the user's timezone
+  const localWeekStart = (): string => {
+    const now = new Date();
+    const localNow = new Date(now.getTime() - tzOffset * 60000);
+    localNow.setUTCHours(0, 0, 0, 0);
+    const dow = localNow.getUTCDay(); // 0=Sun … 6=Sat
+    const daysFromMonday = dow === 0 ? 6 : dow - 1;
+    localNow.setUTCDate(localNow.getUTCDate() - daysFromMonday);
     return new Date(localNow.getTime() + tzOffset * 60000).toISOString();
   };
 
@@ -38,12 +49,12 @@ export async function GET(request: NextRequest) {
 
   const allIds = [user.id, ...friendIds];
 
-  // Build time filter using user's local midnight
+  // Build time filter: daily = today, weekly = Mon–now, alltime = no filter
   let since: string | null = null;
   if (period === "daily") {
-    since = localDayStart(0);
+    since = localMidnight(0);
   } else if (period === "weekly") {
-    since = localDayStart(6);
+    since = localWeekStart();
   }
 
   // Query pomodoro sessions for the period
