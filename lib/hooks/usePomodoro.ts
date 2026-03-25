@@ -425,5 +425,7 @@ export function usePomodoro(
     stop,
     skip,
     resetSessions,
+    // Minutes already saved to DB for the current focus session (ref value, fresh each render)
+    get currentSessionSavedMinutes() { return savedMinutesRef.current; },
   };
 }

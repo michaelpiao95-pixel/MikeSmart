@@ -185,6 +185,7 @@ export default function FocusPage() {
     start, pause, resume, stop, skip, resetSessions,
     config, updateConfig,
     totalStudyMinutes, setTotalStudyMinutes,
+    currentSessionSavedMinutes,
     setTransitionCallback,
   } = usePomodoroContext();
 
@@ -451,8 +452,9 @@ export default function FocusPage() {
             <div className="w-px bg-border" />
             <div>
               {(() => {
-                const subSecs = phase === "focus" ? (config.focusMinutes * 60 - secondsLeft) % 60 : 0;
-                const totalSecs = totalStudyMinutes * 60 + subSecs;
+                const elapsedSecs = phase === "focus" ? config.focusMinutes * 60 - secondsLeft : 0;
+                const uncommittedSecs = Math.max(0, elapsedSecs - currentSessionSavedMinutes * 60);
+                const totalSecs = totalStudyMinutes * 60 + uncommittedSecs;
                 const h = Math.floor(totalSecs / 3600);
                 const m = Math.floor((totalSecs % 3600) / 60);
                 const s = totalSecs % 60;

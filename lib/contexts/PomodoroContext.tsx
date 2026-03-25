@@ -29,6 +29,7 @@ interface PomodoroContextValue {
   updateConfig: (updates: Partial<PomodoroConfig>) => void;
   totalStudyMinutes: number;
   setTotalStudyMinutes: React.Dispatch<React.SetStateAction<number>>;
+  currentSessionSavedMinutes: number;
   /** Focus page registers its per-phase transition handler (chime, glow, etc.) */
   setTransitionCallback: (cb: ((from: PomodoroPhase, to: PomodoroPhase) => void) | null) => void;
 }
