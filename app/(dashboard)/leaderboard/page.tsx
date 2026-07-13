@@ -109,7 +109,9 @@ export default function LeaderboardPage() {
     await fetch("/api/leaderboard/adjust", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ period, deltaHours: h, userId }),
+      // Adjustments never expire, so only alltime is safe — daily/weekly deltas
+      // would keep applying to every future period (rejected server-side too)
+      body: JSON.stringify({ period: "alltime", deltaHours: h, userId }),
     });
     setSaving(false);
     setAdjustingId(null);
@@ -267,8 +269,8 @@ export default function LeaderboardPage() {
                         value={adjustHours}
                         onChange={(e) => setAdjustHours(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") handleAdjust(entry.userId); if (e.key === "Escape") setAdjustingId(null); }}
-                        placeholder="+/- h"
-                        className="w-16 bg-surface-3 border border-brand-600/40 rounded px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        placeholder="+/- h (all-time)"
+                        className="w-28 bg-surface-3 border border-brand-600/40 rounded px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
                       />
                       <button onClick={() => handleAdjust(entry.userId)} disabled={saving} className="text-emerald-400 hover:text-emerald-300 transition-colors">
                         <Check className="w-4 h-4" />
@@ -297,7 +299,7 @@ export default function LeaderboardPage() {
                         <button
                           onClick={() => { setAdjustHours(""); setAdjustingId(entry.userId); }}
                           className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Adjust hours"
+                          title="Adjust all-time hours"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>

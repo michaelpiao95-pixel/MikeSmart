@@ -22,8 +22,14 @@ export async function POST(request: NextRequest) {
   if (myProfile?.is_admin !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { period, deltaHours, userId } = await request.json();
-  if (!["daily", "weekly", "alltime"].includes(period)) {
-    return NextResponse.json({ error: "Invalid period" }, { status: 400 });
+  // Only alltime adjustments are allowed: raw daily/weekly minutes roll off with
+  // the calendar, but adjustments are applied to every request forever — a daily
+  // or weekly delta silently suppresses (or inflates) all future periods.
+  if (period !== "alltime") {
+    return NextResponse.json(
+      { error: "Only alltime adjustments are supported — daily/weekly adjustments never expire and would apply to every future period" },
+      { status: 400 }
+    );
   }
   if (typeof deltaHours !== "number" || isNaN(deltaHours)) {
     return NextResponse.json({ error: "Invalid hours" }, { status: 400 });
@@ -39,22 +45,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   const existing = (profile?.leaderboard_adjustments as Record<string, number>) ?? {};
-  const updated = { ...existing };
-
-  // Cascade delta up the hierarchy: daily → weekly → alltime
-  // Adjusting daily also adds to weekly and alltime (hours studied today count toward the week and all-time)
-  // Adjusting weekly also adds to alltime
-  // Adjusting alltime only affects alltime
-  if (period === "daily") {
-    updated.daily = (existing.daily ?? 0) + deltaMinutes;
-    updated.weekly = (existing.weekly ?? 0) + deltaMinutes;
-    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
-  } else if (period === "weekly") {
-    updated.weekly = (existing.weekly ?? 0) + deltaMinutes;
-    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
-  } else {
-    updated.alltime = (existing.alltime ?? 0) + deltaMinutes;
-  }
+  const updated = { ...existing, alltime: (existing.alltime ?? 0) + deltaMinutes };
 
   await admin.from("profiles").update({ leaderboard_adjustments: updated }).eq("id", targetId);
 
