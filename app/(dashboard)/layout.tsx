@@ -57,7 +57,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-0">
+    <div className="flex h-screen overflow-hidden" style={{ background: "#040407" }}>
       {/* Sidebar — hidden on mobile, shown md+ */}
       <div className="hidden md:flex">
         <Sidebar onCommandPalette={() => setOpen(true)} />
@@ -66,7 +66,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         {/* Mobile header */}
-        <div className="md:hidden sticky top-0 z-10 glass border-b border-border px-4 py-3 flex items-center justify-between">
+        <div className="md:hidden sticky top-0 z-10 px-4 py-3 flex items-center justify-between" style={{ background: "rgba(4,4,7,0.9)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-brand-600/20 flex items-center justify-center">
               <svg className="w-3 h-3 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

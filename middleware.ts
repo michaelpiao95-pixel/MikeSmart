@@ -29,23 +29,25 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
-  const isApiRoute = request.nextUrl.pathname.startsWith("/api");
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith("/login");
+  const isApiRoute = pathname.startsWith("/api");
+  const isPublicRoute = pathname === "/" || isAuthRoute;
 
   // API routes handle their own auth
   if (isApiRoute) return supabaseResponse;
 
-  // Redirect unauthenticated users to login
-  if (!user && !isAuthRoute) {
+  // Redirect unauthenticated users away from protected routes
+  if (!user && !isPublicRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect authenticated users away from login
-  if (user && isAuthRoute) {
+  // Redirect authenticated users away from auth/landing to dashboard
+  if (user && isPublicRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
+    redirectUrl.pathname = "/home";
     return NextResponse.redirect(redirectUrl);
   }
 

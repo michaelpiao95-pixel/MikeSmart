@@ -4,25 +4,26 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
+    /* MikeSmart design system — #040407 base, #7c3aed purple, #06b6d4 cyan */
+    --background: 240 60% 2.2%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 240 60% 2.2%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 240 60% 2.2%;
     --popover-foreground: 0 0% 98%;
-    --primary: 238 84% 67%;
+    --primary: 262 84% 58%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 14%;
+    --secondary: 240 8% 10%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 4.8% 14%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 4.8% 14%;
+    --muted: 240 8% 10%;
+    --muted-foreground: 240 5% 52%;
+    --accent: 262 84% 58%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4.8% 15.9%;
-    --input: 240 4.8% 15.9%;
-    --ring: 238 84% 67%;
+    --border: 262 30% 14%;
+    --input: 262 20% 10%;
+    --ring: 262 84% 58%;
     --radius: 0.5rem;
   }
 }
@@ -74,11 +75,12 @@
 }
 
 @layer utilities {
-  .surface-0 { background-color: #0a0a0f; }
-  .surface-1 { background-color: #111118; }
-  .surface-2 { background-color: #16161f; }
-  .surface-3 { background-color: #1c1c28; }
-  .surface-4 { background-color: #232333; }
+  /* design system surfaces — all derived from #040407 base */
+  .surface-0 { background-color: #040407; }
+  .surface-1 { background-color: #08080f; }
+  .surface-2 { background-color: #0d0b14; }
+  .surface-3 { background-color: #130f1c; }
+  .surface-4 { background-color: #1a1326; }
 
   .glass {
     backdrop-filter: blur(12px);
@@ -88,10 +90,22 @@
   }
 
   .text-gradient {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    background: linear-gradient(135deg, #fff 0%, #7c3aed 50%, #06b6d4 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* brand card — matches design system */
+  .ms-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 20px;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .ms-card:hover {
+    border-color: rgba(124,58,237,0.35);
+    background: rgba(124,58,237,0.05);
   }
 
   /* ── Page / section entrance ──────────────────────────────────── */

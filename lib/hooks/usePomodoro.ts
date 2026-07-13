@@ -30,6 +30,8 @@ interface StoredState {
   sessionsCompleted: number;
   dayTimestamp?: number; // ms timestamp of local midnight — resets sessions when day changes
   date?: string; // legacy, ignored
+  sessionId?: string | null; // DB row id of the in-progress focus session — survives remounts so saves update instead of re-insert
+  savedMinutes?: number; // minutes already persisted for that row — survives remounts so delta stays incremental
 }
 
 function localMidnightMs(): number {
@@ -107,6 +109,8 @@ export function usePomodoro(
           isRunning: isRunningRef.current,
           sessionsCompleted: sessionsRef.current,
           dayTimestamp: localMidnightMs(),
+          sessionId: currentSessionIdRef.current,
+          savedMinutes: savedMinutesRef.current,
           ...overrides,
         };
         localStorage.setItem(LS_KEY, JSON.stringify(state));
@@ -134,6 +138,11 @@ export function usePomodoro(
                 setSecondsLeft(remaining);
                 setIsRunning(true);
                 if (stored.phase === "focus") {
+                  // Re-attach to the in-flight DB row so the next saveIncremental
+                  // updates it instead of inserting a duplicate, and delta stays
+                  // incremental instead of re-counting the whole session
+                  currentSessionIdRef.current = stored.sessionId ?? null;
+                  savedMinutesRef.current = stored.savedMinutes ?? 0;
                   const cfg = configRef.current;
                   const elapsed = cfg.focusMinutes * 60 - remaining;
                   sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
@@ -154,6 +163,15 @@ export function usePomodoro(
               // Paused
               setPhase(stored.phase);
               setSecondsLeft(stored.secondsLeft);
+              if (stored.phase === "focus") {
+                // Re-attach paused focus sessions too — without this, saves after
+                // resume silently no-op (sessionStartedAt is null) and time is lost
+                currentSessionIdRef.current = stored.sessionId ?? null;
+                savedMinutesRef.current = stored.savedMinutes ?? 0;
+                const cfg = configRef.current;
+                const elapsed = cfg.focusMinutes * 60 - stored.secondsLeft;
+                sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
+              }
             }
           }
         }
@@ -210,9 +228,10 @@ export function usePomodoro(
   const saveIncremental = useCallback(
     async (completed: boolean, overrideElapsed?: number) => {
       if (phaseRef.current !== "focus" || !sessionStartedAtRef.current) return 0;
+      // Use timer countdown (not wall clock) so pause time is excluded
       const totalElapsed =
         overrideElapsed ??
-        Math.floor((Date.now() - sessionStartedAtRef.current.getTime()) / 60000);
+        Math.floor((configRef.current.focusMinutes * 60 - secondsLeftRef.current) / 60);
       if (totalElapsed < 1) return 0;
 
       const {
@@ -248,10 +267,13 @@ export function usePomodoro(
 
       const delta = totalElapsed - savedMinutesRef.current;
       savedMinutesRef.current = totalElapsed;
+      // Persist sessionId/savedMinutes now — a refresh between incremental saves
+      // must not resurrect stale values and double-count this session
+      writeLS();
       if (delta > 0) onMinutesSavedRef.current?.(delta);
       return delta > 0 ? delta : 0;
     },
-    [supabase]
+    [supabase, writeLS]
   );
 
   // Auto-transition to next phase (called when current phase timer hits 0)

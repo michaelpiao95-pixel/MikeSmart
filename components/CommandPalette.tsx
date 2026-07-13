@@ -47,7 +47,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       description: "Your daily execution dashboard",
       icon: <Home className="w-4 h-4" />,
       group: "Navigation",
-      action: () => navigate("/"),
+      action: () => navigate("/home"),
       shortcut: "G T",
     },
     {
@@ -112,7 +112,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       description: "25-minute focus session",
       icon: <Timer className="w-4 h-4" />,
       group: "Actions",
-      action: () => navigate("/"),
+      action: () => navigate("/home"),
     },
   ];
 

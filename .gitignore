@@ -38,4 +38,6 @@ Thumbs.db
 # Vercel
 .vercel
 
-.vercel
+# DB exports and cleanup reports — contain real user data, never commit
+scripts/backups/
+scripts/*.txt

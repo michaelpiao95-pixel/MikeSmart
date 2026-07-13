@@ -75,6 +75,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
+        syne: ["var(--font-syne)", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
