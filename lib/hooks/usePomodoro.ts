@@ -303,7 +303,12 @@ export function usePomodoro(
     const fromPhase = phaseRef.current;
 
     if (fromPhase === "focus") {
-      await saveIncremental(true);
+      // Terminal save: round to the nearest minute so a skipped session's
+      // partial minute isn't floored away from the studied total
+      await saveIncremental(
+        true,
+        Math.round((phaseTotalRef.current - secondsLeftRef.current) / 60)
+      );
 
       const newSessions = sessionsRef.current + 1;
       const nextPhase: PomodoroPhase =
@@ -386,7 +391,11 @@ export function usePomodoro(
   const stop = useCallback(async () => {
     setIsRunning(false);
     endTimeRef.current = null;
-    await saveIncremental(false);
+    // Terminal save — round like skip/complete so the last partial minute counts
+    await saveIncremental(
+      false,
+      Math.round((phaseTotalRef.current - secondsLeftRef.current) / 60)
+    );
     setPhase("idle");
     setSecondsLeft(configRef.current.focusMinutes * 60);
     sessionStartedAtRef.current = null;
