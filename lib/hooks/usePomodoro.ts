@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { flushSync } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 
 export type PomodoroPhase = "focus" | "short_break" | "long_break" | "idle";
@@ -32,6 +31,7 @@ interface StoredState {
   date?: string; // legacy, ignored
   sessionId?: string | null; // DB row id of the in-progress focus session — survives remounts so saves update instead of re-insert
   savedMinutes?: number; // minutes already persisted for that row — survives remounts so delta stays incremental
+  phaseTotal?: number; // total seconds of the current phase at its start — config edits mid-phase must not shift elapsed math
 }
 
 function localMidnightMs(): number {
@@ -86,6 +86,10 @@ export function usePomodoro(
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number | null>(null);
+  // Duration of the current phase, frozen at phase start — the single source for
+  // elapsed/progress math so config changes mid-phase only affect future phases
+  const phaseTotalRef = useRef(config.focusMinutes * 60);
+  const transitioningRef = useRef(false);
   const sessionStartedAtRef = useRef<Date | null>(null);
   const lastMidnightRef = useRef<number>(localMidnightMs());
   const savedMinutesRef = useRef(0);
@@ -111,6 +115,7 @@ export function usePomodoro(
           dayTimestamp: localMidnightMs(),
           sessionId: currentSessionIdRef.current,
           savedMinutes: savedMinutesRef.current,
+          phaseTotal: phaseTotalRef.current,
           ...overrides,
         };
         localStorage.setItem(LS_KEY, JSON.stringify(state));
@@ -137,14 +142,14 @@ export function usePomodoro(
                 setPhase(stored.phase);
                 setSecondsLeft(remaining);
                 setIsRunning(true);
+                phaseTotalRef.current = stored.phaseTotal ?? getPhaseSeconds(stored.phase);
                 if (stored.phase === "focus") {
                   // Re-attach to the in-flight DB row so the next saveIncremental
                   // updates it instead of inserting a duplicate, and delta stays
                   // incremental instead of re-counting the whole session
                   currentSessionIdRef.current = stored.sessionId ?? null;
                   savedMinutesRef.current = stored.savedMinutes ?? 0;
-                  const cfg = configRef.current;
-                  const elapsed = cfg.focusMinutes * 60 - remaining;
+                  const elapsed = phaseTotalRef.current - remaining;
                   sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
                 }
               } else {
@@ -156,20 +161,35 @@ export function usePomodoro(
                       ? "long_break"
                       : "short_break"
                     : "focus";
+                const nextSeconds = getPhaseSeconds(nextPhase);
+                const overshoot = Math.round((Date.now() - stored.endTime) / 1000);
                 setPhase(nextPhase);
-                setSecondsLeft(getPhaseSeconds(nextPhase));
+                phaseTotalRef.current = nextSeconds;
+                if (nextPhase !== "focus" && overshoot < nextSeconds) {
+                  // The break began while we were away — auto-run its remainder so
+                  // the user isn't forced to press resume. Focus phases are never
+                  // auto-started unattended: that would fabricate study time.
+                  const breakRemaining = nextSeconds - overshoot;
+                  endTimeRef.current = Date.now() + breakRemaining * 1000;
+                  setSecondsLeft(breakRemaining);
+                  setSessions(stored.sessionsCompleted + 1);
+                  setIsRunning(true);
+                  writeLS();
+                } else {
+                  setSecondsLeft(nextSeconds);
+                }
               }
             } else {
               // Paused
               setPhase(stored.phase);
               setSecondsLeft(stored.secondsLeft);
+              phaseTotalRef.current = stored.phaseTotal ?? getPhaseSeconds(stored.phase);
               if (stored.phase === "focus") {
                 // Re-attach paused focus sessions too — without this, saves after
                 // resume silently no-op (sessionStartedAt is null) and time is lost
                 currentSessionIdRef.current = stored.sessionId ?? null;
                 savedMinutesRef.current = stored.savedMinutes ?? 0;
-                const cfg = configRef.current;
-                const elapsed = cfg.focusMinutes * 60 - stored.secondsLeft;
+                const elapsed = phaseTotalRef.current - stored.secondsLeft;
                 sessionStartedAtRef.current = new Date(Date.now() - elapsed * 1000);
               }
             }
@@ -228,10 +248,11 @@ export function usePomodoro(
   const saveIncremental = useCallback(
     async (completed: boolean, overrideElapsed?: number) => {
       if (phaseRef.current !== "focus" || !sessionStartedAtRef.current) return 0;
-      // Use timer countdown (not wall clock) so pause time is excluded
+      // Use timer countdown (not wall clock) so pause time is excluded; measure
+      // against the phase's frozen total so config edits mid-phase can't inflate it
       const totalElapsed =
         overrideElapsed ??
-        Math.floor((configRef.current.focusMinutes * 60 - secondsLeftRef.current) / 60);
+        Math.floor((phaseTotalRef.current - secondsLeftRef.current) / 60);
       if (totalElapsed < 1) return 0;
 
       const {
@@ -293,6 +314,7 @@ export function usePomodoro(
       setSessions(newSessions);
       setPhase(nextPhase);
       setSecondsLeft(nextSeconds);
+      phaseTotalRef.current = nextSeconds;
 
       const newEndTime = Date.now() + nextSeconds * 1000;
       endTimeRef.current = newEndTime;
@@ -310,6 +332,7 @@ export function usePomodoro(
 
       setPhase(nextPhase);
       setSecondsLeft(nextSeconds);
+      phaseTotalRef.current = nextSeconds;
 
       const newEndTime = Date.now() + nextSeconds * 1000;
       endTimeRef.current = newEndTime;
@@ -331,6 +354,7 @@ export function usePomodoro(
       endTimeRef.current = newEndTime;
       setPhase(targetPhase);
       setSecondsLeft(seconds);
+      phaseTotalRef.current = seconds;
 
       if (targetPhase === "focus") {
         sessionStartedAtRef.current = new Date();
@@ -373,11 +397,16 @@ export function usePomodoro(
   }, [saveIncremental, setPhase, setSecondsLeft, setIsRunning, writeLS]);
 
   const skip = useCallback(async () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setIsRunning(false);
-    endTimeRef.current = null;
-    await transitionToNext();
-  }, [transitionToNext, setIsRunning]);
+    if (phaseRef.current === "idle" || transitioningRef.current) return;
+    transitioningRef.current = true;
+    try {
+      // transitionToNext swaps phase/endTime in place; if the timer was paused,
+      // its setIsRunning(true) restarts the interval via the tick effect
+      await transitionToNext();
+    } finally {
+      transitioningRef.current = false;
+    }
+  }, [transitionToNext]);
 
   const resetSessions = useCallback(() => {
     setSessions(0);
@@ -388,6 +417,7 @@ export function usePomodoro(
   useEffect(() => {
     if (phaseRef.current === "idle") {
       setSecondsLeft(config.focusMinutes * 60);
+      phaseTotalRef.current = config.focusMinutes * 60;
     }
   }, [config.focusMinutes, setSecondsLeft]);
 
@@ -403,16 +433,17 @@ export function usePomodoro(
       const remaining = Math.round((endTimeRef.current - Date.now()) / 1000);
 
       if (remaining <= 0) {
-        clearInterval(intervalRef.current!);
-        intervalRef.current = null;
-        // flushSync forces React to render isRunning=false before transitionToNext
-        // runs, preventing React 18's automatic batching from merging the false+true
-        // updates into a no-op (which would leave the interval useEffect stuck).
-        flushSync(() => {
+        // Keep the interval alive across the transition — transitionToNext swaps
+        // phase/endTime in place, so the next tick continues seamlessly. The old
+        // stop→flushSync→restart dance could leave a live-looking timer with a
+        // dead interval when the isRunning false→true flip coalesced.
+        if (!transitioningRef.current) {
+          transitioningRef.current = true;
           setSecondsLeft(0);
-          setIsRunning(false);
-        });
-        transitionToNext();
+          transitionToNext().finally(() => {
+            transitioningRef.current = false;
+          });
+        }
       } else {
         setSecondsLeft(remaining);
         // Save incrementally every 60 seconds while focus is running
@@ -431,9 +462,10 @@ export function usePomodoro(
     };
   }, [isRunning, transitionToNext, setSecondsLeft, setIsRunning]);
 
-  // progress: 0 = start (full ring), 1 = end (empty ring)
+  // progress: 0 = start (full ring), 1 = end (empty ring) — measured against the
+  // phase's frozen total so config edits mid-phase don't jump the ring
   const progress =
-    phase === "idle" ? 0 : 1 - secondsLeft / getPhaseSeconds(phase);
+    phase === "idle" ? 0 : 1 - secondsLeft / phaseTotalRef.current;
 
   return {
     phase,
@@ -449,5 +481,7 @@ export function usePomodoro(
     resetSessions,
     // Minutes already saved to DB for the current focus session (ref value, fresh each render)
     get currentSessionSavedMinutes() { return savedMinutesRef.current; },
+    // Total seconds of the current phase, frozen at phase start
+    get phaseTotalSeconds() { return phaseTotalRef.current; },
   };
 }

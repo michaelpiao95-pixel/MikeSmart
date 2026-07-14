@@ -26,10 +26,13 @@ interface PomodoroContextValue {
   skip: () => Promise<void>;
   resetSessions: () => void;
   config: PomodoroConfig;
-  updateConfig: (updates: Partial<PomodoroConfig>) => void;
+  updateConfig: (
+    updates: Partial<PomodoroConfig> | ((prev: PomodoroConfig) => Partial<PomodoroConfig>)
+  ) => void;
   totalStudyMinutes: number;
   setTotalStudyMinutes: React.Dispatch<React.SetStateAction<number>>;
   currentSessionSavedMinutes: number;
+  phaseTotalSeconds: number;
   /** Focus page registers its per-phase transition handler (chime, glow, etc.) */
   setTransitionCallback: (cb: ((from: PomodoroPhase, to: PomodoroPhase) => void) | null) => void;
 }
@@ -43,13 +46,18 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { setConfig(loadConfig()); }, []);
 
-  const updateConfig = useCallback((updates: Partial<PomodoroConfig>) => {
-    setConfig((prev) => {
-      const next = { ...prev, ...updates };
-      try { localStorage.setItem(CONFIG_LS_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const updateConfig = useCallback(
+    (updates: Partial<PomodoroConfig> | ((prev: PomodoroConfig) => Partial<PomodoroConfig>)) => {
+      setConfig((prev) => {
+        // Functional form so rapid clicks compound instead of racing a stale render
+        const patch = typeof updates === "function" ? updates(prev) : updates;
+        const next = { ...prev, ...patch };
+        try { localStorage.setItem(CONFIG_LS_KEY, JSON.stringify(next)); } catch {}
+        return next;
+      });
+    },
+    []
+  );
 
   const handleMinutesSaved = useCallback((minutes: number) => {
     setTotalStudyMinutes((prev) => prev + minutes);

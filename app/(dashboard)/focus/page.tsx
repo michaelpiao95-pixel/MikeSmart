@@ -186,6 +186,7 @@ export default function FocusPage() {
     config, updateConfig,
     totalStudyMinutes, setTotalStudyMinutes,
     currentSessionSavedMinutes,
+    phaseTotalSeconds,
     setTransitionCallback,
   } = usePomodoroContext();
 
@@ -452,7 +453,7 @@ export default function FocusPage() {
             <div className="w-px bg-border" />
             <div>
               {(() => {
-                const elapsedSecs = phase === "focus" ? config.focusMinutes * 60 - secondsLeft : 0;
+                const elapsedSecs = phase === "focus" ? phaseTotalSeconds - secondsLeft : 0;
                 const uncommittedSecs = Math.max(0, elapsedSecs - currentSessionSavedMinutes * 60);
                 const totalSecs = totalStudyMinutes * 60 + uncommittedSecs;
                 const h = Math.floor(totalSecs / 3600);
@@ -534,9 +535,8 @@ export default function FocusPage() {
                     <span className="text-muted-foreground flex-1">{label}</span>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => updateConfig({ [key]: Math.max(min, config[key] - 1) })}
-                        disabled={phase !== "idle"}
-                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 disabled:opacity-40 flex items-center justify-center transition-colors"
+                        onClick={() => updateConfig((c) => ({ [key]: Math.max(min, c[key] - 1) }))}
+                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 flex items-center justify-center transition-colors"
                       >
                         <ChevronDown className="w-3 h-3" />
                       </button>
@@ -544,9 +544,8 @@ export default function FocusPage() {
                         {config[key]}
                       </span>
                       <button
-                        onClick={() => updateConfig({ [key]: Math.min(max, config[key] + 1) })}
-                        disabled={phase !== "idle"}
-                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 disabled:opacity-40 flex items-center justify-center transition-colors"
+                        onClick={() => updateConfig((c) => ({ [key]: Math.min(max, c[key] + 1) }))}
+                        className="w-6 h-6 rounded bg-surface-4 hover:bg-surface-0 flex items-center justify-center transition-colors"
                       >
                         <ChevronUp className="w-3 h-3" />
                       </button>
@@ -557,7 +556,7 @@ export default function FocusPage() {
                   </div>
                 ))}
                 {phase !== "idle" && (
-                  <p className="text-muted-foreground/60 text-center pt-1">Stop the timer to change settings</p>
+                  <p className="text-muted-foreground/60 text-center pt-1">Changes apply from the next phase</p>
                 )}
               </div>
             )}
